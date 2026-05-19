@@ -1,4 +1,4 @@
-# SPEC 056 — Implementation Report
+# SPEC 055 — Implementation Report
 
 **Status:** Shipped (S)
 **Date:** 2026-05-19
@@ -194,7 +194,10 @@ extras paths восстановлены после 9.6 (`TestMergePresets_DNSExt
 - `core/build/preset_outbounds.go` (~430 lines) — pre-patch core + cleanup
 - `core/build/preset_outbounds_test.go` (~330 lines) — 18 unit tests
 - `core/template/preset_outbounds_test.go` (~130 lines) — 9 unit tests
-- `SPECS/056-*/SPEC.md`, `PLAN.md`, `TASKS.md`, `IMPLEMENTATION_REPORT.md`
+- `SPECS/055-F-S-PRESET_OUTBOUNDS/` — после консолидации ex-SPEC 056 и
+  ex-SPEC 057 в один Shipped SPEC. 3 файла: `SPEC.md` (feature semantics),
+  `IMPLEMENTATION_PLAN.md` (план реализации, объединивший ex-056 phase plan),
+  `IMPLEMENTATION_REPORT.md` (этот файл).
 
 ### Modified
 - `core/template/preset_types.go` — `PresetOutbound` type, `Preset.Outbounds []PresetOutbound`
@@ -217,11 +220,19 @@ extras paths восстановлены после 9.6 (`TestMergePresets_DNSExt
 
 ## Out of scope (готовы как backlog)
 
-- **SPEC 057** — preset cross-references (explicit dependency между preset'ами)
-- **SPEC 058** — `preset.outbounds.mode = "replace"` (destructive full-replace, сейчас только update)
-- **SPEC 059** — `preset.inbounds` (per-preset inbound configuration)
+После консолидации в SPEC 055, следующие свободные ID — **056 / 057 / 058**.
+(ID 056 и 057 ранее использовались как drafts для outbounds rewrite и DNS
+schema cleanup — обе работы влиты в этот SPEC, ID освобождены.)
+
+- **SPEC 056** — preset cross-references (explicit dependency между preset'ами)
+- **SPEC 057** — `preset.outbounds.mode = "replace"` (destructive full-replace, сейчас только update)
+- **SPEC 058** — `preset.inbounds` (per-preset inbound configuration)
 - Template authoring docs (что можно/нельзя в `preset.outbounds[]`)
 - CI hook `sing-box check` на golden fixtures (golden fixtures не сделаны — реализация уже unit-tested, golden оставлен на отдельную задачу)
+- Update `docs/WIZARD_STATE.md` — описывает только v5 schema, реальный
+  state.json формат v6 (`presets_v1`) после SPEC 053 + всех изменений
+  этого SPEC'а ни в одном doc не задокументирован. Большое расхождение
+  doc vs реальность; кандидат на отдельную задачу.
 
 ## Risks mitigated
 
