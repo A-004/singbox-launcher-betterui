@@ -3,15 +3,27 @@
 **Status:** Shipped (S)
 **Date:** 2026-05-19
 **Branch:** `develop`
-**Phases:** 0–8 complete
+**Phases:** 0–9 complete (Phase 9 = post-ship DNS schema cleanup, ex-SPEC 057
+merged in to keep scope coherent)
 
 ## TL;DR
 
-Преобразование implementation'а SPEC 055 (preset.outbounds) с post-merge
-на pre-patch parser_config. Корневая причина регрессии «strip ещё одного
-поля» устранена: финальный `config.outbounds[]` теперь эмитится **только**
-нативным pipeline'ом, который никогда не видел launcher-only полей и
-ни разу не нуждался в strip-проходах.
+Два слоя:
+
+**Phase 0–8 (outbounds parser restore):** преобразование SPEC 055
+(preset.outbounds) с post-merge архитектуры на pre-patch parser_config.
+Корневая причина регрессии «strip ещё одного поля» устранена: финальный
+`config.outbounds[]` эмитится **только** нативным pipeline'ом, который
+никогда не видел launcher-only полей и ни разу не нуждался в strip-проходах.
+
+**Phase 9 (DNS schema cleanup, ex-SPEC 057):** тот же архитектурный класс
+багов всплыл в DNS pipeline — description leak, dangling rule_set refs,
+double-emit, template DNS library не материализована, copy-of-template-body
+в state extras. Все устранены через **state = thin refs only** инвариант:
+`v6.DNSConfig.ExtraServers/ExtraRules` удалены полностью; DNS-серверы и
+DNS-правила могут жить **только** в template (`dns_options.servers` /
+`preset.dns_servers` / `preset.dns_rule`). State содержит только overrides
+(`template_servers[tag] = {enabled}`) и scalars (final/strategy/...).
 
 Архитектурный поток:
 
@@ -87,7 +99,13 @@ config.route.rules[]   (финальный, без unknown outbound refs)
 | 4 | `8fb10f7` | Wire pre-patch в rebuild / Update / wizard Preview |
 | 5 | `2d16895` | Route dangling outbound cleanup |
 | 6 | `c20b24a` | UI: GetAvailableOutbounds + refresh-on-toggle |
-| 8 | (this commit) | Tests + release notes + IMPLEMENTATION_REPORT |
+| 8 | `23a7b10` | Tests (27 unit) + release notes + IMPLEMENTATION_REPORT v1 |
+| **Phase 9 — DNS schema cleanup (ex-SPEC 057, merged-in)** | | |
+| 9.1 | `9daa3cd` | DNS sanitize unification: `stripDNSWizardOnlyFields` единый source of truth, применяется во ВСЕХ путях DNS server emit (preset bundled / extras / template defaults). Plus `cleanDanglingDNSRule` (зеркало route Phase 5 для DNS). |
+| 9.2 | `c60fd63` | User inline route rules эмитятся напрямую в `route.rules[]` без `rule_set` wrapping. sing-box headless rule_set отвергал connection-level match-поля (protocol/inbound/...). |
+| 9.3 | `e96c86a` | `template.dns_options.servers[]` материализация: новый `parseTemplateDNSDefaultsFromTD` + populate `ctx.Preset.TemplateDNSDefaults` + emit в MergePresetsIntoDNS. Раньше library была недоступна live pipeline'у (только тестовый `BuildRulesAndDNS` её видел). |
+| 9.4 | `4eb7b7d` | `isV6DNSActive` guard в `dnsConfigForUpdate` — устраняет double-emit DNS extras когда state v6 (legacy view дублировал extras). Симптоматический фикс перед root-cause устранением. |
+| 9.5 | `edd4565` | **Root cause:** `v6.DNSConfig.ExtraServers` / `ExtraRules` поля удалены из схемы полностью. State хранит только refs (TemplateServers overrides + scalars). UI пишет, build читает — только refs, ноль inline-копий template body. State = refs only invariant установлен. |
 
 ## Files
 

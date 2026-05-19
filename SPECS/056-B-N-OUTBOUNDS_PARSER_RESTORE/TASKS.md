@@ -154,9 +154,69 @@
 - [x] mode=update на `proxy-out` от `russian`/`ru-inside` действительно фильтрует RU-ноды (pre-patch меняет `OutboundConfig.Filters` ДО generator'а)
 - [x] Disable preset → effect полностью исчезает (TestApply_OriginalParserCfgImmutable подтверждает)
 
+## Phase 9 — Post-ship follow-ups (DNS schema + cleanup, ex-SPEC 057)
+
+После Phase 8 manual-QA вскрылись 4 регрессии того же архитектурного класса
+(launcher fields leak, double-emit, dangling refs) но в DNS pipeline.
+Доработано как extension SPEC 056 — не плодить SPEC'и для родственной задачи.
+
+### Done
+
+- [x] **DNS description strip + dangling rule_set cleanup** (`9daa3cd`)
+  - `stripDNSWizardOnlyFields` — single source of truth (description/enabled/
+    title/if/if_or/default_enabled/_*) во всех DNS emit-путях
+  - Все DNS append идут через strip на копии (preset bundled, extra_servers,
+    template defaults)
+  - `cleanDanglingDNSRule` — зеркало route Phase 5 cleanup для DNS rules
+
+- [x] **User inline route rule direct emit** (`c60fd63`)
+  - `kind=inline` user-rules → напрямую в route.rules[] (без rule_set wrapping)
+  - sing-box headless rule_set отвергает connection-level match-поля
+    (protocol/inbound/...), route.rules[] принимает union → fixes
+    "rule_set[N].rules[0].protocol: unknown field"
+  - Применено в обоих path: preset_merge.go + rules_pipeline.go
+
+- [x] **Template DNS library materialization** (`e96c86a`)
+  - `ctx.Preset.TemplateDNSDefaults` populated в `buildContextFromState` +
+    `BuildPreviewConfig` через `parseTemplateDNSDefaultsFromTD`
+  - `MergePresetsIntoDNS` материализует template.dns_options.servers[] с
+    filter по `state.dns.template_servers.enabled` override
+  - Раньше: user enable cloudflare_udp в DNS tab → server не в config →
+    "default domain resolver not found: cloudflare_udp" FATAL
+
+- [x] **Double-emit DNS extras fix via isV6DNSActive guard** (`4eb7b7d`)
+  - `dnsConfigForUpdate` skip's cfg.Servers/cfg.RulesText когда v6 state active
+  - Симптоматический фикс — root cause устранён в следующем коммите
+
+- [x] **DNS extras dropped from state schema** (`edd4565` — ex-SPEC 057)
+  - `v6.DNSConfig.ExtraServers` + `ExtraRules` поля удалены полностью
+  - `legacyDNSOptionsFromV6` не материализует extras в legacy view
+  - `migrateDNS` (v5→v6): user-added DNS servers/rules дропаются + warning
+    (нет способа конвертировать inline body в ref)
+  - `MergePresetsIntoDNS` + `BuildRulesAndDNS`: extras loops + `cleanDanglingDNSRule`
+    + `collectRuleSetTagsFromPresets` helpers удалены (dead code после
+    устранения extras)
+  - `SyncDNSFullToStateV6`: user-added servers + dnsRulesText silently dropped
+  - 5+ тестов адаптированы; 24/24 packages green
+  - **Invariant**: state = thin refs only, never inline bodies
+
+### Open follow-ups (не блокирующие)
+
+- [ ] **UI cleanup** — убрать «Add DNS Server» / «Add DNS Rule» кнопки из
+  DNS tab. Они теперь записывают в state, который дропает результаты на
+  следующем save → бессмысленно. Когнитивный шум, но не correctness bug.
+
+- [ ] **Strict preset Body validator** — на load для `Rule.Kind=preset`
+  парсить **только** `{vars}`; любые extra-поля в body silently drop с debug
+  log. Защита от forward-compat дрейфа.
+
+- [ ] **Release notes** — SPEC 056 entry в `upcoming.md` обновить с
+  follow-up scope (DNS schema cleanup, ex-SPEC 057).
+
 ## Out of scope (НЕ делать)
 
-- [ ] SPEC 057 — preset cross-references
-- [ ] SPEC 058 — preset.outbounds.mode="replace"
-- [ ] SPEC 059 — preset.inbounds
+- [ ] SPEC 058 — preset cross-references (был запланирован как 057, но 057
+  сжёг под DNS schema cleanup — теперь следующий free SPEC ID = 058)
+- [ ] SPEC 059 — preset.outbounds.mode="replace" (destructive full-replace)
+- [ ] SPEC 060 — preset.inbounds (per-preset inbound configuration)
 - [ ] Template authoring docs (отдельная задача)

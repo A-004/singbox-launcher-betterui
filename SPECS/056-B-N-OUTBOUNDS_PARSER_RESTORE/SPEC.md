@@ -1,9 +1,33 @@
-# SPEC 056-B-N — OUTBOUNDS_PARSER_RESTORE
+# SPEC 056-B-N — OUTBOUNDS_PARSER_RESTORE + STATE_REFS_ONLY
 
-**Status:** New (N)
+**Status:** Shipped (S) — основной flow + follow-up DNS schema cleanup
 **Type:** Bug (B) — regression / rewrite SPEC 055 implementation
+        + Refactor (R) — DNS schema invariant cleanup (merged-in scope, исходно
+        обсуждался как SPEC 057, оставлен под 056 чтобы не плодить SPEC'и)
 **Discovered:** 2026-05-18 (user feedback после SPEC 055 — sing-box 1.12+ FATAL на rebuild)
 **Related:** SPEC 053 (preset bundles, shipped), SPEC 055 (preset.outbounds — feature spec остаётся в силе, переписывается реализация)
+
+## Scope addendum (DNS schema cleanup, ex-SPEC 057)
+
+После основного 056-flow всплыли симптомы того же архитектурного класса в DNS
+pipeline (description leak / dangling rule_set refs / double-emit extras /
+template DNS library не материализована). Корневая причина — `state.dns`
+содержал поля для **inline копий тел template-сущностей** (`extra_servers`,
+`extra_rules`), что нарушало инвариант «state = thin refs only, не копии».
+DNS-чистка добавлена как **расширение этого SPEC'а**, не как отдельный 057:
+архитектурный принцип один, расхождение по местам приложения.
+
+**Invariant SPEC 056 (после addendum):**
+```
+В state.json лежат ТОЛЬКО:
+  • thin refs на template entities (preset_id, server_tag, rule_set_tag)
+    + diff/override (vars, enabled)
+  • полные тела ТОЛЬКО для того, чего нет в template
+    (genuinely user-add: kind=inline/srs route rules)
+
+НИКОГДА не копировать template body в state.
+Копия = дырка во времени: template меняется → копия отстаёт → dangling/конфликт.
+```
 **Last known good:**
 - **Pipeline-level**: tag `v0.9.5` — там `parser_config → config.outbounds[]` эмит чистый sing-box, без launcher-only полей.
 - **Feature-level**: коммит `f665c27` (post-SPEC 053 hot-fixes) — preset bundles работают, outbound pipeline ещё не тронут, **outbound_generator.go идентичен v0.9.5**.
