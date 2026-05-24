@@ -668,7 +668,7 @@ Update wiring: TrafficProfiler exposes channel событий lifecycle (start/s
    - Tests: smoke-test на macOS host
 
 4. **Phase 4 — UI: window shell + Live system-wide view**
-   - `ui/traffic/window.go` — singleton `TrafficWindow`, открывается через `UIService.ShowTrafficWindow()`. Fynetooltip layer подключён.
+   - `ui/traffic/window.go` — singleton `Manager` (window-lifecycle wrapper) + `WindowDeps` bundle. Открывается через `trafficWindowManager(ac, refresh).Show()` из bootstrap. Fynetooltip layer подключён.
    - Button «Traffic Profiler» в `ui/diagnostics_tab.go` (Diagnostics section).
    - Окно: `container.AppTabs` с двумя tab'ами (Live / Per-process).
    - Live: stream rendering через Subscribe(), filter chips, search, newest-first scroll.
@@ -712,7 +712,7 @@ Update wiring: TrafficProfiler exposes channel событий lifecycle (start/s
 | 3 | macOS process icon source | NSWorkspace iconForFile (через cgo) | На MVP — fallback to generic icon если cgo не trivial |
 | 4 | Persist sessions | **No** | In-memory only как в LxBox |
 | 5 | Session JSON schema version | **No version** | In-memory only, no import path |
-| 6 | Recording across `core.ReloadSingBox()` | **Continue with new conn-id space** | Auto-finalize partial; session не теряется |
+| 6 | Recording across sing-box restart (`KillForRestart`) | **Continue with new conn-id space** | Auto-finalize partial; session не теряется |
 | 7 | Background capture (rolling buffer + clash poll) lifetime | **Always on while app runs** | Дёшево (~50-200 lines/sec parsing); решает «открыл окно → видишь уже накопленное» UX. Recording продолжается даже при закрытом окне |
 | 8 | Pre-session backfill window | **60s × ~3000 ev** | Как в LxBox §048 |
 | 9 | Completed sessions cap | **5** | Как в LxBox |
