@@ -10,8 +10,8 @@
 
 | # | Схема URI | sing-box `type` | Секция конфига | Версия / build-tag | Описание |
 |---|-----------|-----------------|----------------|--------------------|----------|
-| 1 | `vless://` | `vless` | `outbounds[]` | core | TCP/raw/ws/grpc/http/`xhttp`(→`httpupgrade`)/quic, TLS, Reality, Vision flow. |
-| 2 | `vmess://` | `vmess` | `outbounds[]` | core | Base64 JSON или legacy cleartext `method:uuid@host:port`. `net=h2`→`http`+TLS, `net=xhttp/httpupgrade`→`httpupgrade`. |
+| 1 | `vless://` | `vless` | `outbounds[]` | core | TCP/raw/ws/grpc/http/`httpupgrade`/quic, TLS, Reality, Vision flow. `xhttp` → `httpupgrade` **с деградацией** (см. ниже). |
+| 2 | `vmess://` | `vmess` | `outbounds[]` | core | Base64 JSON или legacy cleartext `method:uuid@host:port`. `net=h2`→`http`+TLS, `net=xhttp`/`httpupgrade`→`httpupgrade` (та же деградация). |
 | 3 | `trojan://` | `trojan` | `outbounds[]` | core | Те же transport/TLS, что и VLESS. Пароль в userinfo. |
 | 4 | `ss://` | `shadowsocks` | `outbounds[]` | core | SIP002 + legacy `ss://base64("method:password@host:port")`. Методы — фиксированный allow-list (2022-blake3, AEAD GCM, ChaCha20-Poly1305). |
 | 5 | `hysteria2://`, `hy2://` | `hysteria2` | `outbounds[]` | core (QUIC) | Multi-port (`mport`/`ports` query или `host:123,5000-6000` в authority); obfs только `salamander`. |
@@ -21,6 +21,13 @@
 | 9 | `wireguard://` | `wireguard` | **`endpoints[]`** | **sing-box ≥ 1.11** | Один peer; маркеры `@ParserSTART_E`/`@ParserEND_E`. Default port 51820, mtu 1420. |
 
 **Не поддерживаются** (явно, не реализованы): **TUIC**, **AnyTLS**, **ShadowTLS**, **Mieru**, **Hysteria 1** (только v2), **ShadowsocksR / SSR**, **Tor**, plain HTTP-proxy как тип ноды (URL `http(s)://...` — это всегда **источник подписки**, не нода). Селекторы (`selector`, `urltest`, `direct`, `block`, `dns`) — не URI-протоколы; собираются на стороне ParserConfig (см. [секцию `outbounds`](#секция-outbounds)).
+
+**⚠️ `xhttp` транспорт — частичная поддержка через деградацию.** Sing-box **не имеет** настоящего `xhttp` транспорта (Xray-only фича). Если в URI VLESS/VMess указан `type=xhttp` / `net=xhttp`, парсер транслирует его в sing-box-овый **`httpupgrade`** (упрощённый HTTP/1.1 Upgrade без mux), отбрасывая xhttp-specific поля: **`mode`** (`auto`/`stream-up`/`packet-up`), **`extra`** (multiplexing-параметры), **`packetEncoding`** и др. Результат:
+
+- ✅ **Работает**, если сервер настроен на xhttp `mode=packet-up` (по поведению ~эквивалент WebSocket).
+- ❌ **Не работает** для xhttp `mode=stream-up` (требует full-duplex stream — `httpupgrade` это не умеет) и для xhttp с активным мультиплексингом.
+
+Для полноценного xhttp нужно ждать [апстрим в sing-box](https://github.com/SagerNet/sing-box/issues) или использовать Xray-клиент.
 
 Подробности по каждой схеме (query-параметры, TLS, transport, edge cases) — в разделе [Форматы URI для прямых ссылок](#форматы-uri-для-прямых-ссылок) ниже.
 
@@ -598,7 +605,7 @@ Round-trip и выборочные сценарии: `core/config/subscription/s
 - `alpn` — список через запятую → `tls.alpn`
 - `insecure`, `allowInsecure` / `allowinsecure` — при `1` / `true` → `tls.insecure`
 - `pbk`, `sid` — Reality → `tls.reality.public_key`, `short_id`
-- `type` — транспорт: `tcp` / `raw`, `ws`, `grpc`, `http`, `xhttp`, **`httpupgrade`** (синоним `xhttp` → sing-box `httpupgrade`), реже `quic`
+- `type` — транспорт: `tcp` / `raw`, `ws`, `grpc`, `http`, **`httpupgrade`**, реже `quic`. Значение `xhttp` парсер мапит в `httpupgrade` с **деградацией** (см. предупреждение про xhttp в начале документа)
 - `path` — путь WebSocket / HTTP / httpupgrade или fallback имени сервиса для gRPC
 - `host` / `Host` — для WS → заголовок `Host`; если `host` и `sni` в query нет, для WS используется **`obfsParam`**. Если есть `host` или `sni`, они имеют приоритет. Для HTTP/httpupgrade — поле `host` транспорта (регистр ключа `Host` в query учитывается)
 - `headerType` — вместе с `type=raw` или `tcp` и значением `http` задаёт транспорт типа HTTP (обфускация), см. отчёт 023
@@ -626,7 +633,7 @@ JSON должен содержать поля:
 - `id` - UUID клиента
 - `aid` - alterId (опционально)
 - `scy` - метод шифрования (опционально)
-- `net` - тип сети (`tcp`, `ws`, `http`, `grpc`, **`xhttp`/`httpupgrade`** → sing-box transport `httpupgrade`; **`h2`** → transport `http` + TLS по схеме sing-box)
+- `net` - тип сети (`tcp`, `ws`, `http`, `grpc`, **`httpupgrade`**; **`h2`** → transport `http` + TLS; **`xhttp`** → `httpupgrade` с деградацией, см. предупреждение про xhttp в начале документа)
 - `type` - тип заголовка (для `tcp`)
 - `host` - хост (для `ws`/`http`; для WS при пустом `host` подставляется SNI из TLS, если есть)
 - `path` - путь (для `ws`/`http`/`grpc`)
@@ -648,12 +655,12 @@ vmess://eyJ2IjoiMiIsInBzIjoiVGVzdCIsImFkZCI6InNlcnZlci5jb20iLCJwb3J0Ijo0NDMsImlk
 ### Trojan (`trojan://`)
 Стандартный URI формат: `trojan://password@server:port?params#tag`
 
-Те же правила **TLS** и **[V2Ray transport](https://sing-box.sagernet.org/configuration/shared/v2ray-transport/)**, что и для VLESS (в т.ч. `type=ws`, `path`, `host` / `Host`, **`type=httpupgrade`** как у `xhttp`), см. **`SUBSCRIPTION_PARAMS_REPORT.md`** (023) и спеку **029**.
+Те же правила **TLS** и **[V2Ray transport](https://sing-box.sagernet.org/configuration/shared/v2ray-transport/)**, что и для VLESS (в т.ч. `type=ws`, `path`, `host` / `Host`, `type=httpupgrade`; `xhttp` — с той же деградацией, см. предупреждение в начале документа), см. **`SUBSCRIPTION_PARAMS_REPORT.md`** (023) и спеку **029**.
 
 **Параметры query string (типичные):**
 - `security` — например `tls` или `none` (без TLS)
 - `sni`, `host`, **`peer`** — SNI / имя сертификата (приоритет `sni`, затем `peer`, затем `host`); для WS также заголовок Host
-- `type` — `ws`, `grpc`, `http`, `xhttp`, **`httpupgrade`**, `tcp`/`raw` (+ при необходимости `headerType=http`) — как у VLESS
+- `type` — `ws`, `grpc`, `http`, **`httpupgrade`**, `tcp`/`raw` (+ при необходимости `headerType=http`) — как у VLESS. `xhttp` мапится в `httpupgrade` с деградацией
 - `path` — путь WebSocket
 - `alpn`, `fp`, `insecure` / `allowInsecure` — как у VLESS
 
