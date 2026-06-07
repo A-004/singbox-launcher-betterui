@@ -3,7 +3,6 @@ package tabs
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image/color"
 	"strings"
 
@@ -518,7 +517,65 @@ func showSourceEditWindow(
 	previewBox := container.NewBorder(previewStatusScroll, nil, nil, previewGutter, previewListHost)
 
 	previewRefreshSeq := 0
-	refreshPreviewTab := func() {
+	// fetchInProgress: предохранитель от двойного клика "Fetch now" пока
+	// goroutine ещё качает. Гард читается только на UI-thread (set перед
+	// go-фоновой fetch'ей, clear на UI-thread в callback).
+	fetchInProgress := false
+	var refreshPreviewTab func()
+	// triggerOneShotFetch — клик по "Fetch now" в Preview tab когда нет .raw кэша.
+	// Тот же поток что refreshOneSourceFromUI в Sources tab: snapshot источника,
+	// RefreshSourceInPlace в горутине, на UI-thread мигрируем обновлённый snapshot
+	// (включая обновлённую Meta) обратно в model + вызываем refreshPreviewTab
+	// чтобы новый .raw был прочитан и preview отрендерился.
+	triggerOneShotFetch := func() {
+		if fetchInProgress {
+			return
+		}
+		fetchInProgress = true
+		previewStatus.SetText(locale.T("wizard.source.preview_loading"))
+		previewListHost.Objects = nil
+		previewListHost.Add(layout.NewSpacer())
+		previewListHost.Refresh()
+		m := presenter.Model()
+		if m == nil || sourceIndex >= len(m.Sources) {
+			fetchInProgress = false
+			return
+		}
+		// Snapshot источника на UI-thread (deep-copy Meta — иначе goroutine
+		// мутирует общий объект через pointer).
+		snapshot := m.Sources[sourceIndex]
+		if snapshot.Meta != nil {
+			metaCopy := *snapshot.Meta
+			snapshot.Meta = &metaCopy
+		}
+		sourceID := snapshot.ID
+		configService := presenter.ConfigServiceAdapter()
+		go func() {
+			_, fetchErr := configService.RefreshSourceInPlace(&snapshot)
+			fyne.Do(func() {
+				fetchInProgress = false
+				if fetchErr != nil {
+					previewStatus.SetText(locale.Tf("wizard.source.preview_status_err", 0, fetchErr.Error()))
+					previewListHost.Objects = nil
+					previewListHost.Refresh()
+					return
+				}
+				// Snapshot обратно в model (slice мог реаллокнуться — ищем по ID).
+				m := presenter.Model()
+				for i := range m.Sources {
+					if m.Sources[i].ID == sourceID {
+						m.Sources[i] = snapshot
+						break
+					}
+				}
+				presenter.MarkAsChanged()
+				if refreshPreviewTab != nil {
+					refreshPreviewTab()
+				}
+			})
+		}()
+	}
+	refreshPreviewTab = func() {
 		previewRefreshSeq++
 		seq := previewRefreshSeq
 		previewStatus.SetText(locale.T("wizard.source.preview_loading"))
@@ -529,11 +586,18 @@ func showSourceEditWindow(
 			model := presenter.Model()
 			var nodes []*config.ParsedNode
 			var err error
+			// needsFetch — true когда нет .raw кэша для subscription: UI должен
+			// показать кнопку "Fetch now" вместо просто текста ошибки.
+			needsFetch := false
 
 			// SPEC 052 phase 8 preview pipeline:
 			//   - server-source: parse URI напрямую (без сети);
 			//   - subscription с .raw на диске: декодим cached body;
-			//   - subscription без .raw: fallback на network fetch.
+			//   - subscription без .raw: показываем "Fetch now" affordance
+			//     (disabled-источники в обычном parser pipeline никогда не
+			//     дёргают сеть, поэтому .raw для них может не существовать —
+			//     одноразовый manual fetch снимает блок без необходимости
+			//     включать источник).
 			if model != nil && sourceIndex < len(model.Sources) {
 				src := model.Sources[sourceIndex]
 				switch src.Type {
@@ -562,9 +626,8 @@ func showSourceEditWindow(
 							nodes = parsePreviewNodesFromBody(decoded, skip)
 						}
 					} else {
-						// Нет кэша → пользователь должен нажать Refresh per-source.
-						// Не дёргаем сеть автоматически (это приводит к "Loading..." на 30+ сек).
-						err = fmt.Errorf("no cached body — press Refresh to fetch this subscription")
+						// Нет кэша — UI даст affordance для one-shot fetch'а.
+						needsFetch = true
 					}
 				}
 			}
@@ -573,6 +636,26 @@ func showSourceEditWindow(
 					return
 				}
 				previewListHost.Objects = nil
+				if needsFetch {
+					previewStatus.SetText(locale.T("wizard.source.preview_no_cache"))
+					hint := widget.NewLabel(locale.T("wizard.source.preview_no_cache_hint"))
+					hint.Wrapping = fyne.TextWrapWord
+					hint.Importance = widget.LowImportance
+					fetchBtn := widget.NewButtonWithIcon(
+						locale.T("wizard.source.preview_fetch_now"),
+						nil,
+						triggerOneShotFetch,
+					)
+					fetchBtn.Importance = widget.HighImportance
+					// Сборка: hint вверху, кнопка под ним, остальное место — spacer.
+					previewListHost.Add(container.NewVBox(
+						hint,
+						container.NewHBox(fetchBtn, layout.NewSpacer()),
+						layout.NewSpacer(),
+					))
+					previewListHost.Refresh()
+					return
+				}
 				if err != nil {
 					previewStatus.SetText(locale.Tf("wizard.source.preview_status_err", 0, err.Error()))
 				} else {
