@@ -341,9 +341,30 @@ func getDevNodeStatus(devInst uint32) (status uint32, problem uint32, ok bool) {
 // never affect VPN stop behavior — return values exist purely for telemetry.
 func CleanupGhostSingboxTunAdapters(mode GhostTunCleanupMode) (removed int, err error) {
 	aggressive := bool(mode)
-	// Guard 1: OS version.
+
+	// Phase A: NLA profile / signature cleanup. Runs on ALL Windows
+	// versions, not just Win7. NLA-cache accumulation is a global Windows
+	// behavior: the Network Location Awareness service caches every
+	// network it sees and never garbage-collects them. On Win7 this
+	// shows up in the "Choose Network Location" dialog (visible suffix
+	// growth); on Win8+ it just bloats the registry silently. Cleaning
+	// is safe everywhere — see cleanupNLAProfiles for the match-by-
+	// Description-prefix-"singbox-tun" safety story.
+	//
+	// Order: before device cleanup. The callsite guarantees sing-box
+	// is not running, so any "singbox-tun*" profile in the registry
+	// is by definition stale.
+	pRemoved, sRemoved := cleanupNLAProfiles()
+	if pRemoved > 0 || sRemoved > 0 {
+		debuglog.WarnLog("ghost-tun cleanup: NLA done profiles=%d signatures=%d", pRemoved, sRemoved)
+	}
+
+	// Phase B: device-node cleanup — Win7 only. On Win8+ the WinTun
+	// driver sets CM_PROB_PHANTOM on destroyed adapters correctly and
+	// Windows itself garbage-collects them; we explicitly avoid touching
+	// SetupAPI there.
 	if !isWindows7() {
-		debuglog.DebugLog("ghost-tun cleanup: skipped (os=%s, not Win7)", cachedOSDesc)
+		debuglog.DebugLog("ghost-tun cleanup: device-cleanup skipped (os=%s, not Win7)", cachedOSDesc)
 		return 0, nil
 	}
 	if aggressive {
@@ -503,18 +524,6 @@ func CleanupGhostSingboxTunAdapters(mode GhostTunCleanupMode) (removed int, err 
 
 	debuglog.WarnLog("ghost-tun cleanup: done scanned=%d removed=%d skipped=%d", scanned, removed, skipped)
 
-	// Phase 2: NLA profile / signature cleanup. Independent of OS gate —
-	// these registry entries accumulate on every Windows version when
-	// sing-box tunnels come and go, and Windows never garbage-collects
-	// them. Failing to clean these is what makes "Choose Network Location"
-	// dialogs show "singbox-tun0 16", "...17", "...18" forever even after
-	// we've fixed adapter accumulation. See cleanupNLAProfiles for the
-	// match-by-Description-"singbox-tun0" safety story.
-	pRemoved, sRemoved := cleanupNLAProfiles()
-	if pRemoved > 0 || sRemoved > 0 {
-		debuglog.WarnLog("ghost-tun cleanup: NLA done profiles=%d signatures=%d", pRemoved, sRemoved)
-	}
-
 	return removed, nil
 }
 
@@ -527,8 +536,8 @@ func CleanupGhostSingboxTunAdapters(mode GhostTunCleanupMode) (removed int, err 
 // like:
 //
 //	HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\{GUID}
-//	  ProfileName = "singbox-tun0", "singbox-tun0  2", ..., "singbox-tun0  N"
-//	  Description = "singbox-tun0"  ← ours, identification key
+//	  ProfileName = "singbox-tunK", "singbox-tunK  2", ..., "singbox-tunK  N"
+//	  Description = "singbox-tunK"  ← ours, identification key (K = 0,1,2,...)
 //
 // Plus a matching entry per profile in
 // `\NetworkList\Signatures\Unmanaged\<hash>` keyed by `ProfileGuid`. The
@@ -537,14 +546,29 @@ func CleanupGhostSingboxTunAdapters(mode GhostTunCleanupMode) (removed int, err 
 // we fix device-node accumulation, the Choose Network Location dialog
 // keeps showing fresh dedup numbers and the registry growth is monotonic.
 //
-// Match policy: registry value `Description == "singbox-tun0"` (the
-// launcher-set adapter name, NOT the dedup-suffixed `ProfileName`).
-// We only ever touch profiles we created. Other applications' profiles
+// Match policy: registry value `Description` has prefix "singbox-tun"
+// (matching `adapterNamePrefix`). sing-box names adapters
+// singbox-tun0/1/2/... when several run in parallel or shift indices
+// across restarts; Description mirrors the launcher-set adapter name
+// exactly (NOT the dedup-suffixed `ProfileName`). The prefix is unique
+// to us — no other application uses it. Other applications' profiles
 // have their own Description string and are skipped.
 //
 // Returns (profilesRemoved, signaturesRemoved). All errors are logged at
 // WarnLog and never propagated — the cleanup must never affect VPN
-// behavior. Cross-version safe: no Win7 gate.
+// behavior.
+//
+// Cross-version safe: no Win7 gate. NLA-cache accumulation is a
+// universal Windows behavior (verified Win7/8/10/11). On Win7 the
+// suffix is visible in the Choose Network Location dialog; on Win8+
+// it bloats the registry silently. If a future Windows version
+// restructures these keys, our strict `Description == "singbox-tun0"`
+// match simply won't find anything and we return (0, 0) — fail-safe.
+//
+// Defensive `defer recover()` wraps the whole function: registry API
+// calls today return Go errors and don't panic, but on a future or
+// unusual Windows configuration we'd rather log + return zero than
+// crash the launcher.
 //
 // Note: `registry.DeleteKey` deletes the value-only key; NLA profile and
 // signature subkeys do not contain nested subkeys in practice (verified
@@ -553,7 +577,11 @@ func CleanupGhostSingboxTunAdapters(mode GhostTunCleanupMode) (removed int, err 
 // would fail with ERROR_KEY_HAS_CHILDREN and we'd log + skip — safe
 // degradation.
 func cleanupNLAProfiles() (profilesRemoved, signaturesRemoved int) {
-	const adapterDescription = "singbox-tun0"
+	defer func() {
+		if r := recover(); r != nil {
+			debuglog.WarnLog("nla cleanup: recovered from panic: %v", r)
+		}
+	}()
 
 	// Phase A: enumerate Profiles, collect GUIDs of matching entries,
 	// delete profile keys. We collect first then delete because deleting
@@ -587,7 +615,7 @@ func cleanupNLAProfiles() (profilesRemoved, signaturesRemoved int) {
 		}
 		desc, _, err := sub.GetStringValue("Description")
 		sub.Close()
-		if err != nil || desc != adapterDescription {
+		if err != nil || !strings.HasPrefix(desc, adapterNamePrefix) {
 			continue
 		}
 		// Delete subkey via the parent (DeleteKey takes the parent + relative name).
