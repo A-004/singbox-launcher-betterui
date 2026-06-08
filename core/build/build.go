@@ -107,9 +107,6 @@ type ValidationResult struct {
 	Warnings []string
 }
 
-// HasErrors — true, если есть хотя бы один fatal.
-func (v ValidationResult) HasErrors() bool { return len(v.Errors) > 0 }
-
 // ErrInvalidInputs — структурно неправильный BuildContext.
 type ErrInvalidInputs struct{ Reason string }
 

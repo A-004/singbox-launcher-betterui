@@ -57,27 +57,6 @@ type presetOutboundEntry struct {
 // + MergeOutboundUpdatesInPlace (resolve_outbounds.go). UI читает preset
 // binding напрямую через OutboundConfig.Ref/Updates.
 
-// PresetOutboundAddByTag — exported helper для UI: возвращает preset-defined
-// body для tag (mode=add only) с учётом текущих vars. Используется кнопкой
-// Reset на preset outbound row'ах — replace state body на freshly-expanded
-// preset definition.
-//
-// Возвращает nil если preset nil, tag не найден, или entry была отфильтрована
-// if/if_or (т.е. preset defines outbound для других var-комбинаций).
-func PresetOutboundAddByTag(preset *template.Preset, vars map[string]string, tag, goos, goarch string) *configtypes.OutboundConfig {
-	if preset == nil || tag == "" {
-		return nil
-	}
-	entries, _ := ExpandPresetOutbounds(preset, vars, goos, goarch)
-	for _, e := range entries {
-		if e.Mode == "add" && e.Config.Tag == tag {
-			cfg := e.Config
-			return &cfg
-		}
-	}
-	return nil
-}
-
 // ExpandPresetOutbounds разворачивает preset.Outbounds[] в []presetOutboundEntry
 // с уже применённой substitution @var и if/if_or фильтрацией.
 //

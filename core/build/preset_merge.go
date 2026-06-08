@@ -489,13 +489,3 @@ func hasAnyV6Rule(rules []state.Rule) bool {
 	}
 	return false
 }
-
-// hasAnyPresetRef — оставлен для совместимости (используется в тестах).
-func hasAnyPresetRef(rules []state.Rule) bool {
-	for _, r := range rules {
-		if r.Kind == state.RuleKindPreset && r.Enabled {
-			return true
-		}
-	}
-	return false
-}

@@ -224,20 +224,3 @@ func TestMergePresets_DNSUserServers(t *testing.T) {
 		t.Errorf("user rule should appear: %s", out)
 	}
 }
-
-// TestHasAnyPresetRef — sanity на helper.
-func TestHasAnyPresetRef(t *testing.T) {
-	if hasAnyPresetRef(nil) {
-		t.Error("nil should be false")
-	}
-	if hasAnyPresetRef([]state.Rule{{Kind: state.RuleKindInline, Enabled: true,
-		Body: json.RawMessage(`{"name":"x","match":{"port":[443]},"outbound":"direct-out"}`)}}) {
-		t.Error("inline should not count")
-	}
-	if hasAnyPresetRef([]state.Rule{{Kind: state.RuleKindPreset, Ref: "x", Enabled: false}}) {
-		t.Error("disabled preset should not count")
-	}
-	if !hasAnyPresetRef([]state.Rule{{Kind: state.RuleKindPreset, Ref: "x", Enabled: true}}) {
-		t.Error("enabled preset should count")
-	}
-}
