@@ -32,12 +32,11 @@
 3. Tooltip-дедуп (`SetToolTipSafe`) и UI-сплиты — без видимых изменений (тот же UI).
 
 ### Отложено + задокументировано (designed targets, ADR в ARCHITECTURE.md)
-- **dual-state elimination** (ADR-070-2) — риск тихого повреждения state; эволюционировал
-  через 4 SPEC; нужен runtime-verify. **Автономная попытка сделана (агент, all-or-nothing)
-  и ОТКАЧЕНА:** агент удалил `State.CustomRules`/`DNSOptions`, но не сконвертил всех
-  ридеров (`config_service.go`, `config_service_context.go`, `state_test.go`) → build red;
-  мой gate поймал, откатил в чистый HEAD. Подтверждает: dual-state — только supervised
-  (нужно конвертить ридеров по одному с твоим GUI round-trip тестом save/load).
+- ~~**dual-state elimination** (ADR-070-2)~~ ✅ **СДЕЛАНО** — `43a5f11`. (1-я автопопытка
+  была кривой и откачена; 2-я — полная: canonical Rules/DNS = единственная stored truth,
+  legacy через on-demand projections, read-time migration shim. build+vet+full test зелёные,
+  включая golden config-output.) **НО нужен твой GUI round-trip смоук-тест** (см. ниже) —
+  автотесты не покрывают UI load/save round-trip; 2 нюанса поведения в DNS-restore.
 - **controller field-extraction** (ADR-070-7) — 113 полей/4 mutex, риск дедлоков.
 - **полный callback→event retirement** (ADR-070-3) — нужен GUI-smoke; сделан только
   ConfigBuilt-кусок.
