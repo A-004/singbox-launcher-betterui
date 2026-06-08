@@ -1,8 +1,8 @@
 # SPEC 068 — CODE_THREAT_MODEL
 
-**Тип:** Q (Question / architecture research) · **Статус:** N (New)  
-**Дата:** 2026-06-07  
-**Метод:** git/SPECS audit + code review (25+ файлов) + adversarial verification (25 claims, second agent)
+**Тип:** Q (Question / architecture research) · **Статус:** N (New) · реализация см. §18  
+**Дата:** 2026-06-07 (audit) · 2026-06-08 (10 fixes landed + round-2 verify)  
+**Метод:** git/SPECS audit + code review (25+ файлов) + adversarial verification (round 1: 25 claims; round 2: Bucket A defensive items)
 
 Единый артефакт модели угроз: границы доверия, архитектурные швы, STRIDE-каталог, цепочки отказа, **code findings с file:line**, контекст периода Apr–Jun 2026.
 
@@ -529,6 +529,15 @@ BUG2, BUG3, TG4, TD1.
 
 BUG4, BUG5, BUG8, TD2, TD3, TD5, TD4, TD8.
 
+### Round 2 (2026-06-08) — «open» находки §9 / §3.5
+
+Проверены defensive-кандидаты Bucket A (2 агента, с чтением internals fsnotify@v1.10.1):
+
+- **A1 — `fetcher.go` nil-guard на `GetNetworkErrorMessageFunc`** → **опровергнуто**. Обе функции co-assigned на соседних строках `config_service.go:39-40` без ветки между ними; других присваиваний нет; тесты `NewConfigService` не вызывают. Nil-deref недостижим в проде/тестах/любой сборке. Фикс = вводящий в заблуждение шум.
+- **A2 — `logtail.go` Remove-before-Add** → **опровергнуто (fixValue=none)**. fsnotify (kqueue `backend_kqueue.go:500-503`, inotify `backend_inotify.go:446-454`) сам снимает путь из watch-map по Rename/Remove, который и триггерит `openFile()`; re-Add пере-резолвит inode, идемпотентен (fd не течёт); Windows watch'ит родительский каталог. Корректность держит независимый 500ms poll. Сам фикс дал бы `ErrNonExistentWatch`-шум на initial open / copytruncate.
+
+Остаются **open / deferred** (по решению владельца, не баги): build/resolve silent-degradation (intentional resilience, §3.5); test gaps (§10 — logtail rotation, source_loader fetch-fail, session.go).
+
 ---
 
 ## 16. Вердикт
@@ -563,3 +572,33 @@ state (dual) ↔ build (silent) ↔ UI (orchestration) ↔ platform (untested ed
 | 064 | remote Clash API |
 | 065 | Win7 TUN — Chain 4 |
 | 067 | `#if`, breaking `@` |
+
+---
+
+## 18. Реализация (2026-06-08)
+
+### Landed — commit `7b3c0ad` (develop, не запушено)
+
+10 actionable находок, прошедших adversarial verification:
+
+| ID | Файл | Что сделано |
+|----|------|-------------|
+| BUG1 | `core/state/load.go` | `deriveV6FromLegacy` при load (v5 round-trip не теряет rules/DNS) + `load_legacy_save_test.go` |
+| BUG2 | `core/rebuild.go` | ConfigStale остаётся при reject sing-box; clear + `ConfigBuilt{OK:true}` только на валидном конфиге |
+| BUG3 | `presenter_save.go` | success-диалог под `SaveInProgress && Window != nil` |
+| BUG6 | `core/controller.go` | publish `events.VpnStateChanged` в `RunningState.Set` |
+| BUG7 | `core/build/resolve_dns.go` | `evalIfWithReason` сортирует копию `if_or` (нет мутации caller) |
+| TD1 | `docs/ARCHITECTURE.md` | ui/wizard→ui/configurator, drop v5/v6 subpkgs |
+| TD6 | `internal/traffic/profiler.go` | eviction `connProcessMap`/`dnsAccum` на close + sweep `dnsByIP` |
+| TD7 | `ui/error_banner.go` | удалён мёртвый `ErrorBanner` |
+| TD9 | `core/config_service.go` | исправлен stale-комментарий cache-path |
+| TG4 | `internal/platform/wintun_cleanup.go` | чистый `ghostTunDecision` (тестируем off-Windows) + `wintun_cleanup_test.go` |
+
+Проверки: `go vet` чисто · `go test ./...` зелёное · darwin build + reinstall · windows cross-build `./internal/platform/`.
+
+### Не реализовано (по решению, не баги)
+
+- **Round-2 refuted (Bucket A):** A1 fetcher nil-guard, A2 logtail Remove-before-Add — см. §15 Round 2.
+- **Intentional resilience (Bucket B, §3.5):** build/resolve silent-degradation — surface поменял бы рантайм-поведение.
+- **Refuted round 1:** BUG4, BUG5, BUG8, TD2, TD3, TD4, TD5, TD8.
+- **Deferred (Bucket C, §10 test gaps):** `logtail_test`, `source_loader` fetch-fail propagation, `session.go` Append/Aggregate.
