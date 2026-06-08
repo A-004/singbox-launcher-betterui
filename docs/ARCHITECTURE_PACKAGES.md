@@ -378,7 +378,8 @@ handlers + the `ResolveDNS`/`ResolveRoute`/`ExpandPreset` resolvers.
 | `preset_ref_edit_dialog.go` / `preset_ref_convert.go` / `preset_ref_srs.go` | Preset-ref edit/convert/SRS handling. |
 | `library_rules_dialog.go` | Template-preset library picker (Add selected → CustomRules). |
 | `preview_tab.go` | Config preview tab. |
-| `tight_vbox.go` | Compact vbox layout helper. |
+| `tight_vbox.go` / `tight_hbox.go` | Compact vbox/hbox layout helpers (`tight_hbox.go` packs row icons with a negative gap, `rowIconGap`). |
+| `row_scaffold.go` | Shared row scaffolding for the reorderable Rules/DNS/Sources lists: `buildRowLeftLead` (↑/↓ + checkbox), `buildRowEditDelCluster` (edit/delete icons), `newRowLabelToggleTap` (toggle on label tap), `finalizeRow` (Border + HoverRow + tooltip-hover assembly). Unifies icon spacing across builders so it can't drift per-builder. |
 
 ### `ui/configurator/dialogs`
 

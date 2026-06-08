@@ -250,6 +250,12 @@ canonical fields directly, `deriveV6FromLegacy`, `legacyCustomRulesFromV6`, and
 > is removing the in-memory legacy fields and runtime backfill. Deferred to SPEC 070
 > P6 (see §10) because it requires migrating the UI Rules/DNS/source tabs and
 > verifying every headless callsite under the GUI runtime.
+>
+> **Reversion note:** the elimination was actually landed once (commit `43a5f11`,
+> canonical v6 as the sole stored truth) and then **reverted** (`a58a176`) after a
+> GUI round-trip test surfaced a DNS-save regression. The approach is sound but
+> re-landing requires supervised GUI save/load verification of the Rules/DNS/source
+> tabs — hence it remains deferred and documented rather than in-flight.
 
 ### 5.3 On-disk schema migration
 
