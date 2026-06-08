@@ -431,8 +431,12 @@ func CreateSourcesTab(presenter *wizardpresentation.WizardPresenter) fyne.Canvas
 					if subtitle := formatSourceSubtitle(meta, srcPtr.Update, m.Defaults.Reload); subtitle != "" {
 						subtitleText := canvas.NewText(subtitle, theme.PlaceHolderColor())
 						subtitleText.TextSize = theme.CaptionTextSize()
+						// Indent the subtitle by the exact width of the leading
+						// cluster (↑ ↓ + checkbox) so it starts right under the
+						// title — the title in titleRow also sits after leftLead.
+						// Hardcoding broke once the reorder arrows were added.
 						leftPad := canvas.NewRectangle(color.Transparent)
-						leftPad.SetMinSize(fyne.NewSize(48, 0))
+						leftPad.SetMinSize(fyne.NewSize(leftLead.MinSize().Width, 0))
 						lines = append(lines, container.NewBorder(nil, nil, leftPad, nil, subtitleText))
 					}
 					if len(lines) > 1 {
