@@ -12,6 +12,9 @@ func normalizeNilSlices(s *State) {
 	if s.ConfigParams == nil {
 		s.ConfigParams = []ConfigParam{}
 	}
+	if s.CustomRules == nil {
+		s.CustomRules = []CustomRule{}
+	}
 	if s.Connections.Sources == nil {
 		s.Connections.Sources = []Source{}
 	}

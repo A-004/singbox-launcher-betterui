@@ -59,17 +59,15 @@ func TestParseV6_MetaAndConnections(t *testing.T) {
 		t.Errorf("dns_options.servers lost: %+v", s.DNS.Servers)
 	}
 
-	// Legacy view (SPEC 070 ADR-070-2: on-demand projection): inline видна,
-	// preset-ref скрыт.
-	legacyCustom := LegacyCustomRulesView(s)
-	if len(legacyCustom) != 1 {
-		t.Errorf("legacy CustomRules should contain only inline (preset-ref skipped): %+v", legacyCustom)
+	// Legacy view: inline видна в CustomRules, preset-ref скрыт
+	if len(s.CustomRules) != 1 {
+		t.Errorf("legacy CustomRules should contain only inline (preset-ref skipped): %+v", s.CustomRules)
 	}
-	if legacyCustom[0].Label != "Firefox" {
-		t.Errorf("legacy CustomRule label: %q", legacyCustom[0].Label)
+	if s.CustomRules[0].Label != "Firefox" {
+		t.Errorf("legacy CustomRule label: %q", s.CustomRules[0].Label)
 	}
-	if legacyCustom[0].SelectedOutbound != "proxy-out" {
-		t.Errorf("legacy outbound: %q", legacyCustom[0].SelectedOutbound)
+	if s.CustomRules[0].SelectedOutbound != "proxy-out" {
+		t.Errorf("legacy outbound: %q", s.CustomRules[0].SelectedOutbound)
 	}
 }
 
@@ -127,16 +125,10 @@ func TestSave_AlwaysWritesV6(t *testing.T) {
 	path := filepath.Join(dir, "state.json")
 
 	// Pure inline rules — раньше шло v5, теперь должно идти v6.
-	// SPEC 070 ADR-070-2: legacy CustomRules field удалён — задаём canonical
-	// inline Rule напрямую.
 	s := New()
-	inlineBody, _ := json.Marshal(InlineBody{
-		Name:     "Test inline",
-		Match:    map[string]interface{}{"ip_is_private": true},
-		Outbound: "direct-out",
-	})
-	s.Rules = []Rule{
-		{Kind: RuleKindInline, Enabled: true, Body: inlineBody},
+	s.CustomRules = []CustomRule{
+		{Label: "Test inline", Enabled: true, SelectedOutbound: "direct-out",
+			Rule: map[string]interface{}{"ip_is_private": true}},
 	}
 
 	if err := s.Save(path); err != nil {
@@ -284,11 +276,10 @@ func TestParseV6_LegacyInlineConversion(t *testing.T) {
 		"dns": {}
 	}`)
 	s, _ := Parse(raw)
-	legacyCustom := LegacyCustomRulesView(s)
-	if len(legacyCustom) != 1 {
-		t.Fatalf("expected 1 CustomRule, got %d", len(legacyCustom))
+	if len(s.CustomRules) != 1 {
+		t.Fatalf("expected 1 CustomRule, got %d", len(s.CustomRules))
 	}
-	cr := legacyCustom[0]
+	cr := s.CustomRules[0]
 	if cr.Label != "X" || cr.SelectedOutbound != "proxy-out" {
 		t.Errorf("legacy CustomRule: %+v", cr)
 	}
@@ -315,11 +306,10 @@ func TestParseV6_LegacySRSConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	legacyCustom := LegacyCustomRulesView(s)
-	if len(legacyCustom) != 1 {
-		t.Fatalf("expected 1 CustomRule, got %d", len(legacyCustom))
+	if len(s.CustomRules) != 1 {
+		t.Fatalf("expected 1 CustomRule, got %d", len(s.CustomRules))
 	}
-	cr := legacyCustom[0]
+	cr := s.CustomRules[0]
 	if cr.Type != RuleTypeSRS {
 		t.Errorf("Type: %q want srs", cr.Type)
 	}

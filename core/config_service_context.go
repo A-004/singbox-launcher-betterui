@@ -101,25 +101,45 @@ func parseTemplateDNSDefaultsFromTD(td *template.TemplateData) []build.TemplateD
 
 // dnsConfigForUpdate — извлекает DNS-related данные из state в build.DNSConfig.
 //
-// SPEC 070 ADR-070-2: canonical-only. `state.DNS` (flat servers[]/rules[] через
-// kind discriminator) — единственная stored truth. Servers/Rules эмитятся через
-// `ctx.Preset.DNS` в MergePresetsIntoDNS; здесь читаем только scalars. Legacy
-// v5-файлы мигрируются read-time (migrateLegacyIntoCanonical в Load), так что
-// s.DNS всегда populated к моменту build — отдельной pure-v5 ветки больше нет.
+// Schema distinction:
+//   - v6 state — `state.DNS` (state.DNSOptions) — flat servers[]/rules[] через
+//     kind discriminator. Servers/Rules эмитятся через `ctx.Preset.DNS`
+//     в MergePresetsIntoDNS. Здесь читаем только scalars (Final/Strategy)
+//     — но они в state живут в Vars[].
+//   - pure-v5 state — DNSOptions единственный источник данных, читаем
+//     cfg.Servers/RulesText.
+//
+// v6 active iff len(s.Rules) > 0 OR len(s.DNS.Servers/Rules) > 0.
 //
 // dns_* scalars из state.Vars[] всегда побеждают (SPEC 056-R-N: единый
 // KV-store для всех wizard vars, включая dns_*).
 //
-// SPEC: independent_cache УДАЛЕНО — deprecated в sing-box 1.14.0.
+// SPEC: independent_cache УДАЛЕНО — deprecated в sing-box 1.14.0; legacy
+// state.Vars[dns_independent_cache] и DNSOptions.IndependentCache игнорируются.
 func dnsConfigForUpdate(s *state.State) build.DNSConfig {
 	cfg := build.DNSConfig{}
-	if s == nil {
-		return cfg
-	}
 
-	// scalars из canonical DNS (servers/rules идут через ctx.Preset.DNS).
-	cfg.Final = s.DNS.Final
-	cfg.Strategy = s.DNS.Strategy
+	v6Active := s != nil &&
+		(len(s.Rules) > 0 ||
+			len(s.DNS.Servers) > 0 ||
+			len(s.DNS.Rules) > 0)
+
+	if v6Active {
+		// v6 path: scalars из DNSV6; servers/rules идут через ctx.Preset.DNS.
+		cfg.Final = s.DNS.Final
+		cfg.Strategy = s.DNS.Strategy
+	} else if s.DNSOptions != nil {
+		// pure-v5 path
+		cfg.Final = s.DNSOptions.Final
+		cfg.Strategy = s.DNSOptions.Strategy
+		cfg.Servers = s.DNSOptions.Servers
+		if len(s.DNSOptions.Rules) > 0 {
+			raw, err := json.Marshal(map[string]interface{}{"rules": s.DNSOptions.Rules})
+			if err == nil {
+				cfg.RulesText = string(raw)
+			}
+		}
+	}
 
 	// dns_* scalars из vars[] (источник истины; SPEC 032 + SPEC 056-R-N).
 	for _, v := range s.Vars {
@@ -133,17 +153,36 @@ func dnsConfigForUpdate(s *state.State) build.DNSConfig {
 	return cfg
 }
 
-// routeConfigForUpdate — SPEC 070 ADR-070-2: canonical-only.
+// routeConfigForUpdate — конвертит state.CustomRules в build.RouteConfig.
 //
-// Все правила (preset/inline/srs) эмитятся через MergePresetsIntoRoute в
-// правильном порядке из state.Rules (ctx.Preset). Legacy v5 CustomRules emit
-// удалён — v5-файлы мигрируются read-time в s.Rules (migrateLegacyIntoCanonical),
-// поэтому отдельной CustomRules-ветки больше нет. RouteConfig.Rules остаётся
-// пустым (route.rules[] эмитятся канонически).
+// SPEC 053: если state.Rules содержит правила — legacy CustomRules emit
+// **скипается** (RouteConfig.Rules = nil). Все правила (preset/inline/srs)
+// эмитятся через MergePresetsIntoRoute в правильном порядке из state.Rules.
+// Это избегает double-emit (правило не появится дважды в route.rules[]).
 //
 // `route.final` НЕ читается здесь: он подставляется на этапе
 // template-substitution через `@route_final` (state.vars["route_final"] →
-// template substituter → финальный config.json).
-func routeConfigForUpdate(_ *state.State) build.RouteConfig {
-	return build.RouteConfig{}
+// template substituter → финальный config.json). MergeRouteSection видит
+// пустой FinalOutbound и оставляет уже-substituted шаблонное значение.
+func routeConfigForUpdate(s *state.State) build.RouteConfig {
+	if len(s.Rules) > 0 {
+		// v6 path: rules эмитятся через MergePresetsIntoRoute в правильном порядке.
+		return build.RouteConfig{}
+	}
+	rules := make([]build.RouteRule, 0, len(s.CustomRules))
+	for _, cr := range s.CustomRules {
+		outbound := cr.SelectedOutbound
+		if outbound == "" {
+			outbound = cr.DefaultOutbound
+		}
+		rules = append(rules, build.RouteRule{
+			Enabled:     cr.Enabled,
+			Outbound:    outbound,
+			PrimaryRule: cr.Rule,
+			RuleSets:    cr.RuleSet,
+		})
+	}
+	return build.RouteConfig{
+		Rules: rules,
+	}
 }
