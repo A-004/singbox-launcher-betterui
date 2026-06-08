@@ -255,6 +255,27 @@ func normalizeRequestError(err error) error {
 	return err
 }
 
+// classifyRequestError maps a non-nil HTTP request error to a user-facing error.
+// Order of precedence (identical across all Clash API request sites):
+//  1. context.Canceled (e.g. system sleep) → ErrPlatformInterrupt.
+//  2. net.Error timeout → "network timeout: connection timed out".
+//  3. *net.OpError on "dial" → "network error: cannot connect to server".
+//  4. fallback: fmt.Errorf(fallbackFormat, err), where fallbackFormat must contain a %w verb.
+//
+// Callers wrap the returned error in their own return statement (arity differs per call).
+func classifyRequestError(err error, fallbackFormat string) error {
+	if e := normalizeRequestError(err); e != err {
+		return e
+	}
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		return fmt.Errorf("network timeout: connection timed out")
+	}
+	if opErr, ok := err.(*net.OpError); ok && opErr.Op == "dial" {
+		return fmt.Errorf("network error: cannot connect to server")
+	}
+	return fmt.Errorf(fallbackFormat, err)
+}
+
 // TestAPIConnection attempts to connect to the Clash API. Aborts with ErrPlatformInterrupt when the system is sleeping or context is cancelled.
 func TestAPIConnection(baseURL, token string) error {
 	ctx, err := requestContext()
@@ -282,16 +303,7 @@ func TestAPIConnection(baseURL, token string) error {
 	}()
 	if err != nil {
 		writeLog(debuglog.LevelInfo, "[%s] Error executing API test request: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
-		if e := normalizeRequestError(err); e != err {
-			return e
-		}
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return fmt.Errorf("network timeout: connection timed out")
-		}
-		if opErr, ok := err.(*net.OpError); ok && opErr.Op == "dial" {
-			return fmt.Errorf("network error: cannot connect to server")
-		}
-		return fmt.Errorf("failed to execute API test request: %w", err)
+		return classifyRequestError(err, "failed to execute API test request: %w")
 	}
 
 	writeLog(debuglog.LevelVerbose, "[%s] GET /version response status for API test: %d\n", time.Now().Format("2006-01-02 15:04:05"), resp.StatusCode)
@@ -371,16 +383,7 @@ func GetProxiesInGroup(baseURL, token, groupName string) ([]ProxyInfo, string, e
 	}()
 	if err != nil {
 		logMsg(debuglog.LevelInfo, "GetProxiesInGroup: ERROR: Failed to execute request: %v", err)
-		if e := normalizeRequestError(err); e != err {
-			return nil, "", e
-		}
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return nil, "", fmt.Errorf("network timeout: connection timed out")
-		}
-		if opErr, ok := err.(*net.OpError); ok && opErr.Op == "dial" {
-			return nil, "", fmt.Errorf("network error: cannot connect to server")
-		}
-		return nil, "", fmt.Errorf("failed to execute /proxies request: %w", err)
+		return nil, "", classifyRequestError(err, "failed to execute /proxies request: %w")
 	}
 
 	logMsg(debuglog.LevelVerbose, "GetProxiesInGroup: Response status: %s", resp.Status)
@@ -516,16 +519,7 @@ func SwitchProxy(baseURL, token, group, proxy string) error {
 	}()
 	if err != nil {
 		writeLog(debuglog.LevelInfo, "[%s] Error executing switch request for %s/%s: %v\n", time.Now().Format("2006-01-02 15:04:05"), group, proxy, err)
-		if e := normalizeRequestError(err); e != err {
-			return e
-		}
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return fmt.Errorf("network timeout: connection timed out")
-		}
-		if opErr, ok := err.(*net.OpError); ok && opErr.Op == "dial" {
-			return fmt.Errorf("network error: cannot connect to server")
-		}
-		return fmt.Errorf("failed to execute switch request: %w", err)
+		return classifyRequestError(err, "failed to execute switch request: %w")
 	}
 
 	writeLog(debuglog.LevelVerbose, "[%s] PUT /proxies/%s response status: %d\n", time.Now().Format("2006-01-02 15:04:05"), group, resp.StatusCode)
@@ -568,16 +562,7 @@ func GetDelay(baseURL, token, proxyName string) (int64, error) {
 	}()
 	if err != nil {
 		writeLog(debuglog.LevelInfo, "[%s] Error executing delay request for %s: %v\n", time.Now().Format("2006-01-02 15:04:05"), proxyName, err)
-		if e := normalizeRequestError(err); e != err {
-			return 0, e
-		}
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return 0, fmt.Errorf("network timeout: connection timed out")
-		}
-		if opErr, ok := err.(*net.OpError); ok && opErr.Op == "dial" {
-			return 0, fmt.Errorf("network error: cannot connect to server")
-		}
-		return 0, fmt.Errorf("failed to execute delay request: %w", err)
+		return 0, classifyRequestError(err, "failed to execute delay request: %w")
 	}
 
 	writeLog(debuglog.LevelVerbose, "[%s] GET /proxies/%s/delay response status: %d\n", time.Now().Format("2006-01-02 15:04:05"), proxyName, resp.StatusCode)

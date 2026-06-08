@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -520,40 +519,11 @@ func getNodeValue(node *configtypes.ParsedNode, key string) string {
 	}
 }
 
-// matchesPattern checks if a value matches a pattern (supports regex and negation)
+// matchesPattern checks if a value matches a pattern (supports regex and negation).
+// Delegates to the shared configtypes.MatchesPattern so subscription skip-filters and
+// selector filters stay byte-equivalent (see core/config/configtypes/matcher.go).
 func matchesPattern(value, pattern string) bool {
-	// Negation literal: !literal
-	if strings.HasPrefix(pattern, "!") && !strings.HasPrefix(pattern, "!/") {
-		literal := strings.TrimPrefix(pattern, "!")
-		return value != literal
-	}
-
-	// Negation regex: !/regex/i
-	if strings.HasPrefix(pattern, "!/") && strings.HasSuffix(pattern, "/i") {
-		regexStr := strings.TrimPrefix(pattern, "!/")
-		regexStr = strings.TrimSuffix(regexStr, "/i")
-		re, err := regexp.Compile("(?i)" + regexStr)
-		if err != nil {
-			debuglog.WarnLog("Parser: Invalid regex pattern %s: %v", pattern, err)
-			return false
-		}
-		return !re.MatchString(value)
-	}
-
-	// Regex: /regex/i
-	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/i") {
-		regexStr := strings.TrimPrefix(pattern, "/")
-		regexStr = strings.TrimSuffix(regexStr, "/i")
-		re, err := regexp.Compile("(?i)" + regexStr)
-		if err != nil {
-			debuglog.WarnLog("Parser: Invalid regex pattern %s: %v", pattern, err)
-			return false
-		}
-		return re.MatchString(value)
-	}
-
-	// Literal match (case-sensitive)
-	return value == pattern
+	return configtypes.MatchesPattern(value, pattern)
 }
 
 func shouldSkipNode(node *configtypes.ParsedNode, skipFilters []map[string]string) bool {
