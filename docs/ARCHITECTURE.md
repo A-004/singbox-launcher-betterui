@@ -21,16 +21,18 @@
 manages a sing-box VPN core. It is written
 in Go with [Fyne](https://fyne.io) for the UI. The launcher downloads and pins a
 sing-box binary — specifically the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
-fork (`constants.RequiredCoreVersion = "1.13.13-lx.3"`, built with the `with_xhttp` +
+fork (`constants.RequiredCoreVersion`, currently `1.13.13-lx.6`, built with the `with_xhttp` +
 `with_awg` build tags and fetched from the fork's GitHub Releases; the fork builds
 every platform, including the Windows 7 (`windows/386`) `legacy-windows-7` asset,
 so XHTTP/AWG work there too — there is no upstream/legacy split anymore). It fetches
 and parses proxy subscriptions (VLESS / VMess / Trojan /
-Shadowsocks / Hysteria2 / SSH / SOCKS / Naive / WireGuard, plus the Xray JSON-array
-format) — including the **XHTTP** transport (`type=xhttp` for VLESS/VMess/Trojan,
+Shadowsocks / Hysteria2 / TUIC / SSH / SOCKS / Naive / WireGuard, plus the Xray
+JSON-array format, Amnezia `vpn://` profiles and pasted WG/AWG `[Interface]/[Peer]`
+conf text) — including the **XHTTP** transport (`type=xhttp` for VLESS/VMess/Trojan,
 parsed, generated into `config.json`, and round-tripped to share URIs) and
 **AmneziaWG 2.0** on WireGuard endpoints (obfuscation params `jc`/`jmin`/`jmax`,
-`s1`–`s4`, `h1`–`h4`, CPS packets `i1`–`i5`; AWG endpoint MTU auto-clamped to 1280) —
+`s1`–`s4`, `h1`–`h4` — single values or `lo-hi` randomization ranges, CPS packets
+`i1`–`i5`; AWG endpoint MTU auto-clamped to 1280) —
 and assembles a working `config.json` from a user-edited **state** plus a
 versioned **template**. A configuration **wizard** (the "configurator") lets users
 edit subscription sources, global outbounds, routing rules, and DNS, all preview-

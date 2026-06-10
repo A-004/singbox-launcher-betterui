@@ -20,6 +20,9 @@
 | 8 | `naive+https://`, `naive+quic://` | `naive` | `outbounds[]` | **sing-box ≥ 1.13.0** + build tag **`with_naive_proxy`** (Apple/Android/Windows-сборки SagerNet ОК; минимальный Linux отвергает в runtime) | DuckSoft 2020 URI-диалект. `extra-headers=` (CRLF-разделённые пары). TLS только `server_name`. |
 | 9 | `wireguard://` | `wireguard` | **`endpoints[]`** | **sing-box ≥ 1.11** (+ **`with_awg`** для AmneziaWG) | Один peer; маркеры `@ParserSTART_E`/`@ParserEND_E`. Default port 51820, mtu 1420. Опциональные параметры **AmneziaWG 2.0** (jc/jmin/jmax, s1–s4, h1–h4, i1–i5) — см. ниже. |
 | 10 | `tuic://` | `tuic` | `outbounds[]` | core (QUIC) | TUIC v5: `uuid:password` в userinfo. Query: `congestion_control` (cubic/new_reno/bbr), `udp_relay_mode` (native/quic), `alpn`, `sni`, `allow_insecure`, `reduce_rtt`/`zero_rtt_handshake`, `heartbeat`, `fp`. TLS обязателен (QUIC). |
+| 11 | `vpn://` | `wireguard` | **`endpoints[]`** | как №9 | Профиль **Amnezia** (`.vpn`-файл: base64url + qCompress + JSON, SPEC 075): импортируется WG/AWG-контейнер, конвертация в канонический `wireguard://`-URI. См. секцию Amnezia (`vpn://`) ниже. |
+
+Кроме URI, поле Add принимает **голый `[Interface]/[Peer]`-текст** (`.conf` WireGuard/AmneziaWG, включая AWG-поля) — conf-блоки распознаются до построчного разбора и конвертируются в `wireguard://`-URI (SPEC 076); см. секцию про `.conf`-текст ниже.
 
 **Не поддерживаются** (явно, не реализованы): **AnyTLS**, **ShadowTLS**, **Mieru**, **Hysteria 1** (только v2), **ShadowsocksR / SSR**, **Tor**, plain HTTP-proxy как тип ноды (URL `http(s)://...` — это всегда **источник подписки**, не нода). Селекторы (`selector`, `urltest`, `direct`, `block`, `dns`) — не URI-протоколы; собираются на стороне ParserConfig (см. [секцию `outbounds`](#секция-outbounds)).
 
@@ -33,7 +36,7 @@
 - `httpupgrade` теперь **отдельный** транспорт (HTTP/1.1 Upgrade) — больше не путается с xhttp ни на входе, ни на выходе share-URI.
 - Детали: `SPECS/071-F-N-XHTTP_TRANSPORT/SPEC.md`, `sing-box-lx/docs/lx-config.md`.
 
-**✅ AmneziaWG 2.0 (AWG2) — обфускация WireGuard (build-tag `with_awg`).** WireGuard-endpoint (`wireguard://`) может нести promoted-поля AWG: числа `jc`/`jmin`/`jmax`, `s1`–`s4`, `h1`–`h4` и CPS-строки `i1`–`i5` (AWG 2.0, case-sensitive tag-формат). Парсятся из URI, эмитятся в `endpoints[]`, round-trip в share-URI без потерь. Endpoint **без** AWG-полей — обычный WireGuard (byte-identical с апстримом). Детали полей — секция [WireGuard](#wireguard-wireguard) ниже; `SPECS/073-F-N-AMNEZIAWG_PARAMS/SPEC.md`, `sing-box-lx/docs/lx-config.md`.
+**✅ AmneziaWG 2.0 (AWG2) — обфускация WireGuard (build-tag `with_awg`).** WireGuard-endpoint (`wireguard://`) может нести promoted-поля AWG: числа `jc`/`jmin`/`jmax`, `s1`–`s4`, `h1`–`h4` и CPS-строки `i1`–`i5` (AWG 2.0, case-sensitive tag-формат). `h1`–`h4` — одиночное число **или диапазон** `lo-hi` (header randomization AWG 2.0; ядро ≥ `1.13.13-lx.6` само выбирает значение per-handshake — сабтаска 073.2). Источники импорта: `wireguard://`/`awg://`-URI, `vpn://`-профили Amnezia (SPEC 075) и вставленный `.conf`-текст (SPEC 076); эмиссия в `endpoints[]`, round-trip в share-URI без потерь. Endpoint **без** AWG-полей — обычный WireGuard (byte-identical с апстримом). Детали полей — секция [WireGuard](#wireguard-wireguard) ниже; `SPECS/073-F-N-AMNEZIAWG_PARAMS/SPEC.md`, `sing-box-lx/docs/lx-config.md`.
 
 Подробности по каждой схеме (query-параметры, TLS, transport, edge cases) — в разделе [Форматы URI для прямых ссылок](#форматы-uri-для-прямых-ссылок) ниже.
 
