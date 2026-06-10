@@ -326,12 +326,12 @@ func applyAWGFields(endpoint map[string]interface{}, q url.Values) {
 		if raw == "" {
 			continue
 		}
-		n, err := strconv.ParseUint(raw, 10, 32)
+		n, err := parseAWGNumeric(raw)
 		if err != nil {
-			debuglog.DebugLog("applyAWGFields: skip %s=%q (not a uint32): %v", k, raw, err)
+			debuglog.DebugLog("applyAWGFields: skip %s=%q (%v)", k, raw, err)
 			continue
 		}
-		endpoint[k] = int64(n)
+		endpoint[k] = n
 	}
 	for _, k := range awgStringFields {
 		// q.Get already URL-decodes (incl. '+' → space and %3C → '<'); the tag
@@ -342,6 +342,33 @@ func applyAWGFields(endpoint map[string]interface{}, q url.Values) {
 		}
 		endpoint[k] = v
 	}
+}
+
+// parseAWGNumeric parses an AWG numeric field value (SPEC 073.2). Besides a
+// plain uint32, AmneziaWG 2.0 clients export header randomization ranges for
+// H1–H4 ("H1 = 43613244-384550127" in .conf and awg:// query): the client picks
+// a value inside the range, the server accepts the whole range. The sing-box-lx
+// endpoint shape takes a single uint32, so a range is collapsed to its start —
+// any in-range value is valid, and the start keeps parse → share → parse
+// deterministic. A reversed range is tolerated (smaller bound wins).
+func parseAWGNumeric(raw string) (int64, error) {
+	if n, err := strconv.ParseUint(raw, 10, 32); err == nil {
+		return int64(n), nil
+	}
+	loStr, hiStr, found := strings.Cut(raw, "-")
+	if !found {
+		return 0, fmt.Errorf("not a uint32")
+	}
+	lo, errLo := strconv.ParseUint(strings.TrimSpace(loStr), 10, 32)
+	hi, errHi := strconv.ParseUint(strings.TrimSpace(hiStr), 10, 32)
+	if errLo != nil || errHi != nil {
+		return 0, fmt.Errorf("not a uint32 or lo-hi range")
+	}
+	if hi < lo {
+		lo = hi
+	}
+	debuglog.DebugLog("parseAWGNumeric: collapsing range %q -> %d", raw, lo)
+	return int64(lo), nil
 }
 
 // splitAndTrim splits a string by separator, trims whitespace from each part,
