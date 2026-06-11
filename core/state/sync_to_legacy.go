@@ -25,6 +25,7 @@ func syncLegacyFromConnections(s *State) {
 				ExcludeFromGlobal:       src.ExcludeFromGlobal,
 				ExposeGroupTagsToGlobal: src.ExposeGroupTagsToGlobal,
 				Disabled:                !src.Enabled,
+				DetourTag:               src.DetourTag,
 			}
 			if src.Tag != nil {
 				ps.TagPrefix = src.Tag.Prefix
@@ -39,6 +40,7 @@ func syncLegacyFromConnections(s *State) {
 				TagMask:           src.Label, // force tag = label
 				ExcludeFromGlobal: src.ExcludeFromGlobal,
 				Disabled:          !src.Enabled,
+				DetourTag:         src.DetourTag,
 			}
 			proxies = append(proxies, ps)
 		}

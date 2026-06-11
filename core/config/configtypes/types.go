@@ -106,6 +106,11 @@ type ProxySource struct {
 	// Omit-when-default so legacy ParserConfig files (no field) are treated
 	// as enabled, matching prior behavior.
 	Disabled bool `json:"disabled,omitempty"`
+	// DetourTag: SPEC 077 — tag of another outbound that this source's nodes
+	// dial through (proxy chain). Empty = direct. Promoted to node.Outbound
+	// ["detour"] for each non-WireGuard node at parse time; validated (dangling/
+	// cycle/self → dropped) at generation time.
+	DetourTag string `json:"detour_tag,omitempty"`
 }
 
 // Sentinel ref values for OutboundConfig (SPEC 058-R-N STATE_AS_TEMPLATE_DIFF).

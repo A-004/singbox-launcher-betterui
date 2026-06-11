@@ -67,6 +67,7 @@ func syncConnectionsFromLegacy(s *State) {
 				Outbounds:               p.Outbounds,
 				ExcludeFromGlobal:       p.ExcludeFromGlobal,
 				ExposeGroupTagsToGlobal: p.ExposeGroupTagsToGlobal,
+				DetourTag:               p.DetourTag,
 			}
 			if existing, ok := oldByURL[p.Source]; ok {
 				src.ID = existing.ID
@@ -88,6 +89,7 @@ func syncConnectionsFromLegacy(s *State) {
 				Enabled:           !p.Disabled,
 				URI:               uri,
 				ExcludeFromGlobal: p.ExcludeFromGlobal,
+				DetourTag:         p.DetourTag,
 			}
 			if existing, ok := oldByURI[uri]; ok {
 				src.ID = existing.ID
