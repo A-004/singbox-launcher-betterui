@@ -56,6 +56,13 @@ type Source struct {
 
 	// type=server only
 	URI string `json:"uri,omitempty"`
+
+	// DetourTag — SPEC 077: tag of another outbound this source's nodes dial
+	// through (proxy chain / hop). Empty = direct dial. Applies to both server
+	// and subscription sources. Stored by tag (consistent with rules/selectors);
+	// a dangling/cyclic/self target is dropped at build time (fail-open), the
+	// node then dials directly. Not applied to WireGuard nodes.
+	DetourTag string `json:"detour_tag,omitempty"`
 }
 
 // TagSpec — правила преобразования тэгов нод подписки.

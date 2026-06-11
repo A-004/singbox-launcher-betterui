@@ -305,10 +305,41 @@ func LoadNodesFromSource(
 			configtypes.MaxNodesPerSubscription, skippedDueToLimit)
 	}
 
+	// SPEC 077: apply the source-level detour to every node it produced, so the
+	// generator emits "detour":"<tag>" on each. Skipped for WireGuard (endpoint,
+	// not a dial-based outbound) and for nodes that already carry an Xray Jump
+	// (the subscription declared its own chain — that wins). The tag is validated
+	// (dangling/cycle/self) later in the generator, where the full tag set is
+	// known; here we only stamp it.
+	applySourceDetour(nodes, proxySource.DetourTag)
+
 	totalDuration := time.Since(startTime)
 	debuglog.DebugLog("LoadNodesFromSource: END source %d/%d (total duration: %v, nodes: %d)",
 		subscriptionIndex+1, totalSubscriptions, totalDuration, len(nodes))
 	return nodes, nil
+}
+
+// applySourceDetour stamps node.Outbound["detour"] = detourTag on every eligible
+// node (SPEC 077). No-op when detourTag is empty. WireGuard nodes and nodes with
+// an Xray Jump are left untouched (see LoadNodesFromSource for the rationale).
+func applySourceDetour(nodes []*configtypes.ParsedNode, detourTag string) {
+	detourTag = strings.TrimSpace(detourTag)
+	if detourTag == "" {
+		return
+	}
+	for _, node := range nodes {
+		if node == nil || node.Scheme == "wireguard" {
+			continue
+		}
+		if node.Jump != nil {
+			debuglog.DebugLog("applySourceDetour: node %q has an Xray Jump — source detour %q not applied", node.Tag, detourTag)
+			continue
+		}
+		if node.Outbound == nil {
+			node.Outbound = map[string]interface{}{}
+		}
+		node.Outbound["detour"] = detourTag
+	}
 }
 
 // applyTagsToXrayNode applies tag_prefix/tag_postfix/tag_mask and MakeTagUnique to main and jump tags.

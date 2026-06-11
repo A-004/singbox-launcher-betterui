@@ -170,10 +170,13 @@ handlers + the `ResolveDNS`/`ResolveRoute`/`ExpandPreset` resolvers.
 | `node_parser_ssh.go` | SSH. |
 | `node_parser_hysteria2.go` | Hysteria2 (+ `hysteria2_ports.go` for mport ranges). |
 | `node_parser_naive.go` | Naive. |
-| `node_parser_wireguard.go` | WireGuard. |
+| `node_parser_tuic.go` | TUIC v5 (SPEC 074). |
+| `node_parser_wireguard.go` | WireGuard + AmneziaWG 2.0 promoted fields (`applyAWGFields`, ranged `h1`–`h4` via `parseAWGHeaderRange`, overlap warning, AWG MTU clamp — SPEC 073/073.2). |
+| `node_parser_amnezia.go` | Amnezia `vpn://` profile import: base64url + qCompress decode → WG/AWG container (`last_config`) → canonical `wireguard://` URI (SPEC 075). |
+| `wgconf_text.go` | Pasted `[Interface]/[Peer]` conf text → `wireguard://` URIs (`ExtractWGConfBlocks` / `ConvertWGConfText`, SPEC 076). |
 | `xray_json_array.go` / `xray_outbound_convert.go` | Xray JSON-array parsing: element → `ParsedNode` (+ jump hop), `remarks`→Label, slug tags; stream-settings→transport/TLS. |
 | `share_uri.go` | `ShareURIFromOutbound` dispatcher (reverse of `ParseNode`). |
-| `shareuri_vless.go` / `shareuri_vmess.go` / `shareuri_trojan.go` / `shareuri_ss.go` / `shareuri_socks.go` / `shareuri_hysteria2.go` / `shareuri_ssh.go` / `shareuri_naive.go` / `shareuri_wireguard.go` | Per-protocol outbound→share-URI encoders. |
+| `shareuri_vless.go` / `shareuri_vmess.go` / `shareuri_trojan.go` / `shareuri_ss.go` / `shareuri_socks.go` / `shareuri_hysteria2.go` / `shareuri_ssh.go` / `shareuri_tuic.go` / `shareuri_naive.go` / `shareuri_wireguard.go` | Per-protocol outbound→share-URI encoders. |
 | `shareuri_helpers.go` | Shared encode helpers (`mapGet*`, `transportToQuery`, TLS-to-query, ALPN/insecure). |
 | `utf8_utils.go` | Consolidated UTF-8 validate/repair (`FixUTF8*`, `HasControlChars`) — SPEC 070 dedup. |
 | `encoding_utils.go` | Consolidated multi-variant base64 decode — SPEC 070 dedup. |

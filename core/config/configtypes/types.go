@@ -46,9 +46,17 @@ func canonicalGOOSName(goos string) string {
 //
 // Examples:
 //
-//	singbox-launcher/0.9.9 (macOS arm64)
-//	singbox-launcher/0.9.9 (windows amd64)
-//	singbox-launcher/0.9.9 (linux amd64)
+//	LxBox/1.1.4 (desktop; macOS)
+//	LxBox/1.1.4 (desktop; windows)
+//	LxBox/1.1.4 (desktop; linux)
+//
+// Product brand token is "LxBox" with a "desktop" variant tag (distinguishes
+// from the Android LxBox build). The UA must NOT contain a bare "singbox" (no
+// hyphen): some subscription panels (Remnawave/Marzban-style) route the
+// response body by a substring match on the User-Agent, and a bare "singbox"
+// is matched as a non-sing-box client — the panel then serves a full
+// client-config JSON instead of the base64/URI subscription list the launcher
+// can ingest. The regression test in useragent_test.go guards against it.
 //
 // See SPEC 061-F-N §"Request headers" §1.
 func BuildSubscriptionUserAgent() string {
@@ -57,7 +65,7 @@ func BuildSubscriptionUserAgent() string {
 	if ver == "" {
 		ver = "unknown"
 	}
-	return fmt.Sprintf("singbox-launcher/%s (%s %s)", ver, canonicalGOOSName(runtime.GOOS), runtime.GOARCH)
+	return fmt.Sprintf("LxBox/%s (desktop; %s)", ver, canonicalGOOSName(runtime.GOOS))
 }
 
 // MaxNodesPerSubscription limits the maximum number of nodes parsed from a single subscription
@@ -98,6 +106,11 @@ type ProxySource struct {
 	// Omit-when-default so legacy ParserConfig files (no field) are treated
 	// as enabled, matching prior behavior.
 	Disabled bool `json:"disabled,omitempty"`
+	// DetourTag: SPEC 077 — tag of another outbound that this source's nodes
+	// dial through (proxy chain). Empty = direct. Promoted to node.Outbound
+	// ["detour"] for each non-WireGuard node at parse time; validated (dangling/
+	// cycle/self → dropped) at generation time.
+	DetourTag string `json:"detour_tag,omitempty"`
 }
 
 // Sentinel ref values for OutboundConfig (SPEC 058-R-N STATE_AS_TEMPLATE_DIFF).

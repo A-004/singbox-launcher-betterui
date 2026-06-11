@@ -89,5 +89,10 @@
 - **034** — фича завершена (F-C): HTTP_ENV_PROXY (исходящие HTTP(S) через `HTTP_PROXY`/`HTTPS_PROXY`; единый клиент; маскировка паролей в ошибках; UI — `GetURLBytes`; **SPECS/034-F-C-HTTP_ENV_PROXY/SPEC.md**)
 - **035** — исследование завершено (Q-C): VLESS_SINGBOX_FLOW_FIELD (поле `flow` у VLESS outbound: исходники sing-box/sing-vmess, отсутствие требования явного ключа в JSON, откат эксперимента с `flow: ""`; **SPECS/035-Q-C-VLESS_SINGBOX_FLOW_FIELD/SPEC.md**, **IMPLEMENTATION_REPORT.md**)
 - **036** — фича завершена (F-C): XRAY_JUMP_ANY_PROTOCOL (Xray JSON-массив: hop **`socks`** или **`vless`** по `dialerProxy`; follow-up к **033**; **SPECS/036-F-C-XRAY_JUMP_ANY_PROTOCOL/**)
+- **037–072** — см. папки задач (список здесь не велся; статус — в имени папки `NNN-T-S-NAME`)
+- **073** — фича (F-N, ядро сделано): AMNEZIAWG_PARAMS (AWG 2.0 параметры на WireGuard-endpoint; сабтаска 073.1 — robustness-фиксы парсинга, v1.1.2; сабтаска 073.2 — диапазоны `H1–H4` с пробросом в ядро ≥ lx.6, v1.1.4; открыта только опциональная UI-фаза; **SPECS/073-F-N-AMNEZIAWG_PARAMS/**)
+- **074** — фича завершена (F-C): TUIC_PROTOCOL (TUIC v5, v1.1.2; **SPECS/074-F-C-TUIC_PROTOCOL/**)
+- **075** — фича завершена (F-C): AMNEZIA_VPN_IMPORT (импорт `vpn://`-профилей Amnezia — base64url + qCompress + JSON → WG/AWG-узел, v1.1.3; **SPECS/075-F-C-AMNEZIA_VPN_IMPORT/**)
+- **076** — фича завершена (F-C): WGCONF_PASTE_IMPORT (вставка голого `[Interface]/[Peer]`-текста в поле Add, v1.1.3; **SPECS/076-F-C-WGCONF_PASTE_IMPORT/**)
 
 Подробное описание каждой задачи — в SPEC.md соответствующей папки.
