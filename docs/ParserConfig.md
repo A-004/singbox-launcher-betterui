@@ -887,6 +887,10 @@ wireguard://privkey-base64@server.example.com:51821?publickey=server-pubkey&addr
 
 Содержимое `.conf`-файла WireGuard/AmneziaWG можно вставить в поле Add вкладки Sources **как есть** — классификатор сам выделяет `[Interface]`-блоки из вставленного текста до построчного разбора и конвертирует каждый в канонический `wireguard://`-URI (хранится и шарится именно URI). Несколько блоков за одну вставку → несколько узлов; ссылки в том же тексте продолжают работать. Имя узла — хост из `Endpoint`. AWG-поля и кламп MTU — как у `vpn://` выше. Невалидный блок пропускается с предупреждением в лог, не срывая вставку. Реализация: `core/config/subscription/wgconf_text.go` + врезка в `classifyInputLines` (`ui/configurator/business/parser.go`); спека: `SPECS/076-F-C-WGCONF_PASTE_IMPORT/SPEC.md`.
 
+### Добавление из файла (Add from file)
+
+Конфиги WG/AmneziaWG часто раздают файлом — кнопка **«Add from file»** на вкладке Sources (рядом с Get free) открывает выбор файла (`.conf` / `.vpn` / `.txt`) и прогоняет его содержимое через тот же путь, что и поле Add: `.conf` → WG/AWG-узел, `.vpn` → профиль Amnezia, текст со ссылками → узлы. Лимит файла — 1 МБ. Реализация: `business.ReadSourceFileText` + `dialog.NewFileOpen` в `ui/configurator/tabs/source_tab.go`; спека: `SPECS/079-F-N-ADD_SOURCE_FROM_FILE/SPEC.md`.
+
 ## Маркерная секция в `config.json`
 
 Парсер перезаписывает блок между `/** @ParserSTART */` и `/** @ParserEND */`. Пример результата:

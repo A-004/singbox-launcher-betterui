@@ -7,6 +7,7 @@
 ## EN
 ### Highlights
 - **Saved states switcher is safer.** The Core dashboard "Switch state…" dropdown now lists **● Current (active)** as the first item and shows it as the selected value, so a stray tap on the top of the list is a no-op instead of switching away from the live state. (Switching to a named state already asks first — Save current / Discard / Cancel — that confirm dialog is unchanged.)
+- **Add source from file.** WG/AmneziaWG configs are often shared as files — the Sources tab now has an **Add from file** button: pick a `.conf` ([Interface]/[Peer]), a `.vpn` (vpn:// link) or a `.txt` of proxy links, and it imports through the same path as the Add field. (SPEC 079)
 
 - **Self-describing debug API.** `GET /` now returns a manifest (api/spec/launcher/core/auth, a version-pinned docs link, and the endpoint list) and `GET /help` returns just the endpoint list — point an agent at the base URL + token and it discovers the surface itself. Settings → Debug API has a new **Copy API info** button that copies a connection card (base URL, token, versions, docs) to hand to an agent. (SPEC 078)
 - **Debug API hardening.** `PATCH /state/dns` with an empty/keyless body (`{}`) now returns `422` instead of silently wiping all DNS servers/rules. `GET /` + `/help` now advertise the real verbs each endpoint accepts (e.g. `GET/PATCH` for state writes, `GET/DELETE` for a traffic session, `GET/POST` for verbose) — the User-Agent endpoint was mislabeled `PUT` (it serves `PATCH`), and the write endpoints were missing from the list.
@@ -18,6 +19,7 @@
 ## RU
 ### Основное
 - **Переключатель сохранённых состояний стал безопаснее.** В дашборде Core выпадающий список «Сменить state…» теперь первым пунктом показывает **● Текущее (активно)** и отображает его как выбранное — случайный тап по верху списка ничего не делает, а не уводит с живого состояния. (Переключение на именованный state по-прежнему спрашивает — Сохранить текущее / Не сохранять / Отмена — этот модал не менялся.)
+- **Добавление источника из файла.** Конфиги WG/AmneziaWG часто раздают файлом — на вкладке Sources появилась кнопка **«Добавить из файла»**: выбираете `.conf` ([Interface]/[Peer]), `.vpn` (ссылка vpn://) или `.txt` со ссылками — импорт идёт тем же путём, что и поле Add. (SPEC 079)
 
 - **Самоописываемый debug API.** `GET /` теперь отдаёт манифест (api/spec/launcher/core/auth, ссылку на доку, привязанную к версии, и список эндпоинтов), а `GET /help` — только список эндпоинтов: дай агенту base URL + токен, и он сам разберётся. В Settings → Debug API появилась кнопка **Копировать инфо API** — кладёт в буфер карточку подключения (base URL, токен, версии, docs) для передачи агенту. (SPEC 078)
 - **Усиление debug API.** `PATCH /state/dns` с пустым/безключевым телом (`{}`) теперь возвращает `422`, а не молча стирает все DNS-серверы/правила. `GET /` и `/help` теперь показывают реальные методы каждого эндпоинта (`GET/PATCH` для записи state, `GET/DELETE` для traffic-сессии, `GET/POST` для verbose) — у User-Agent был ошибочно указан `PUT` (работает `PATCH`), а write-эндпоинты вообще отсутствовали в списке.
