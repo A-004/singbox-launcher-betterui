@@ -22,6 +22,15 @@ import (
 // it, but the generated config drifts from what was tested. Forcing a
 // redownload on upgrade is cheap (one click for the user) and deterministic.
 //
+// Invalidate AT MOST ONCE per launcher version. After a stale-check (whether we
+// actually removed a file or there was nothing to remove) we stamp
+// LastTemplateLauncherVersion = current, so the next startup on the same version
+// short-circuits. Without this, the marker was only ever written by the UI
+// Download button — so a template placed back by hand (or shipped as a bundled
+// seed) stayed "stale" forever and got wiped on *every* launch, making it
+// impossible to install one manually. Stamping here means the user can drop a
+// template file in by hand and it survives. (See bug: junk re-deletion loop.)
+//
 // Skipped for dev builds: AppVersion of the form "v-local-test" or
 // "unnamed-dev" doesn't compare meaningfully against semver, so the policy
 // below would either always-invalidate or never-invalidate. Both are
@@ -47,17 +56,29 @@ func InvalidateTemplateIfStale(execDir string) error {
 	}
 
 	templatePath := filepath.Join(binDir, constants.WizardTemplateFileName)
-	if _, err := os.Stat(templatePath); err != nil {
-		if os.IsNotExist(err) {
-			return nil // nothing to invalidate
+	switch _, err := os.Stat(templatePath); {
+	case err == nil:
+		if rmErr := os.Remove(templatePath); rmErr != nil {
+			// Don't stamp the marker if the removal failed — we want to retry
+			// the invalidation next startup rather than silently leave a stale
+			// template in place.
+			return fmt.Errorf("template invalidation: remove %s: %w", templatePath, rmErr)
 		}
+		debuglog.InfoLog("template: invalidated by launcher upgrade (was installed by %q, now %q)", last, constants.AppVersion)
+	case os.IsNotExist(err):
+		// Nothing to remove — but still record that this version has run its
+		// stale-check, so a manually-placed template isn't wiped on next launch.
+		debuglog.DebugLog("template: no file to invalidate; recording stale-check for %q", constants.AppVersion)
+	default:
 		return fmt.Errorf("template invalidation: stat %s: %w", templatePath, err)
 	}
 
-	if err := os.Remove(templatePath); err != nil {
-		return fmt.Errorf("template invalidation: remove %s: %w", templatePath, err)
+	// Mark the stale-check done for this version (at-most-once invalidation).
+	// Best effort: if persisting fails we just re-invalidate next upgrade, the
+	// same cosmetic nuisance MarkTemplateInstalled already tolerates.
+	if err := locale.MarkTemplateInstalled(binDir, constants.AppVersion); err != nil {
+		debuglog.WarnLog("template: failed to record stale-check version: %v", err)
 	}
-	debuglog.InfoLog("template: invalidated by launcher upgrade (was installed by %q, now %q)", last, constants.AppVersion)
 	return nil
 }
 

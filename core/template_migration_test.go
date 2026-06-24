@@ -6,7 +6,14 @@ import (
 	"testing"
 
 	"singbox-launcher/internal/constants"
+	"singbox-launcher/internal/locale"
 )
+
+// lastTemplateVersion reads the persisted LastTemplateLauncherVersion marker.
+func lastTemplateVersion(t *testing.T, root string) string {
+	t.Helper()
+	return locale.LoadSettings(filepath.Join(root, "bin")).LastTemplateLauncherVersion
+}
 
 // withAppVersion temporarily overrides constants.AppVersion for a test scope
 // so the function-under-test reads the version we want without us touching
@@ -75,6 +82,52 @@ func TestInvalidateTemplateIfStale_OlderVersion_RemovesTemplate(t *testing.T) {
 		}
 		if templateExists(t, root) {
 			t.Fatal("expected template to be removed (last < current)")
+		}
+		// Marker must advance so the next launch doesn't re-invalidate.
+		if got := lastTemplateVersion(t, root); got != "v0.8.8" {
+			t.Fatalf("expected marker stamped to v0.8.8 after removal, got %q", got)
+		}
+	})
+}
+
+// Stale check on a version that has no template file on disk (already removed,
+// or never present): we must still stamp the marker so a manually-placed
+// template on the next launch is not wiped.
+func TestInvalidateTemplateIfStale_StaleButNoFile_StampsMarker(t *testing.T) {
+	root := makeTempLauncherDir(t, false, `{"lang":"en","last_template_launcher_version":"v0.8.7"}`)
+	withAppVersion(t, "v0.8.8", func() {
+		if err := InvalidateTemplateIfStale(root); err != nil {
+			t.Fatalf("invalidate: %v", err)
+		}
+		if got := lastTemplateVersion(t, root); got != "v0.8.8" {
+			t.Fatalf("expected marker stamped to v0.8.8 even with no file, got %q", got)
+		}
+	})
+}
+
+// The reported bug: after an upgrade wipes the template, the user drops one in
+// by hand. The next launch on the SAME version must keep it — invalidation is
+// at-most-once per version.
+func TestInvalidateTemplateIfStale_ManualTemplateSurvivesSecondLaunch(t *testing.T) {
+	root := makeTempLauncherDir(t, true, `{"lang":"en","last_template_launcher_version":"v0.8.7"}`)
+	withAppVersion(t, "v0.8.8", func() {
+		// First launch on v0.8.8: stale → removed + marker stamped.
+		if err := InvalidateTemplateIfStale(root); err != nil {
+			t.Fatalf("first invalidate: %v", err)
+		}
+		if templateExists(t, root) {
+			t.Fatal("expected template removed on first launch")
+		}
+		// User places a template by hand.
+		if err := os.WriteFile(filepath.Join(root, "bin", "wizard_template.json"), []byte("{}"), 0o644); err != nil {
+			t.Fatalf("manual write: %v", err)
+		}
+		// Second launch on the same version: must NOT remove it again.
+		if err := InvalidateTemplateIfStale(root); err != nil {
+			t.Fatalf("second invalidate: %v", err)
+		}
+		if !templateExists(t, root) {
+			t.Fatal("manually-placed template must survive a second launch on the same version")
 		}
 	})
 }
