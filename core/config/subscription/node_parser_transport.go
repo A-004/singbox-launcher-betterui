@@ -1,6 +1,7 @@
 package subscription
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strings"
 
@@ -216,6 +217,27 @@ func normalizeRealityShortID(s string) string {
 	return out
 }
 
+// isValidRealityPublicKey reports whether pbk is a usable REALITY public_key.
+// A REALITY key is an X25519 public key: 32 bytes, shared as base64url without
+// padding (43 chars). Public lists sometimes paste junk into pbk (e.g. literal
+// "enabled", "true", an empty token) while declaring security=tls — sing-box then
+// rejects the whole config with "invalid public_key" and the VPN won't start at
+// all. We treat any non-decodable / wrong-length value as "no reality" so the node
+// degrades to plain TLS instead of poisoning the generated config.json.
+func isValidRealityPublicKey(pbk string) bool {
+	pbk = strings.TrimSpace(pbk)
+	// REALITY uses base64url; tolerate a stray '=' pad and base64std variants.
+	pbk = strings.TrimRight(pbk, "=")
+	if len(pbk) != 43 {
+		return false
+	}
+	if _, err := base64.RawURLEncoding.DecodeString(pbk); err == nil {
+		return true
+	}
+	_, err := base64.RawStdEncoding.DecodeString(pbk)
+	return err == nil
+}
+
 func applyTLSQueryExtras(q url.Values, tlsData map[string]interface{}) {
 	if alpn := queryGetFold(q, "alpn"); alpn != "" {
 		alpn = normalizePercentDecodeLoop(alpn)
@@ -255,7 +277,14 @@ func vlessTLSFromNode(node *configtypes.ParsedNode) (map[string]interface{}, boo
 		fp = "random"
 	}
 
-	if pbk != "" {
+	// Only build a REALITY block when pbk is a usable X25519 public key. We gate on
+	// the key itself, not on security=reality, because many real lists carry pbk
+	// without an explicit security=reality (e.g. xhttp+reality nodes). Broken public
+	// lists sometimes attach a junk pbk (e.g. "enabled") to a plain security=tls
+	// node; emitting that as public_key makes sing-box reject the entire config
+	// ("invalid public_key") and nothing starts. In that case fall through to plain
+	// TLS below.
+	if isValidRealityPublicKey(pbk) {
 		tlsData := map[string]interface{}{
 			"enabled":     true,
 			"server_name": sni,
@@ -265,7 +294,7 @@ func vlessTLSFromNode(node *configtypes.ParsedNode) (map[string]interface{}, boo
 			},
 			"reality": map[string]interface{}{
 				"enabled":    true,
-				"public_key": pbk,
+				"public_key": strings.TrimSpace(pbk),
 				"short_id":   normalizeRealityShortID(queryGetFold(q, "sid")),
 			},
 		}

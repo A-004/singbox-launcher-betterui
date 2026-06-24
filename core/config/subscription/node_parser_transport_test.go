@@ -40,3 +40,43 @@ func TestParseNode_VLESS_RealityShortIDSanitized(t *testing.T) {
 		t.Fatalf("short_id got %q want 48ab12", got)
 	}
 }
+
+func TestIsValidRealityPublicKey(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg", true},  // base64url, 43 chars
+		{" mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg ", true}, // surrounding space
+		{"mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg=", true}, // stray pad
+		{"enabled", false}, // junk from broken public lists
+		{"true", false},
+		{"", false},
+		{"short", false},
+		{"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", false}, // 43 non-base64 chars
+	}
+	for _, tt := range tests {
+		if got := isValidRealityPublicKey(tt.in); got != tt.want {
+			t.Errorf("isValidRealityPublicKey(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
+// Regression: a broken public list attaches pbk=enabled to a plain security=tls
+// node. Emitting that as reality.public_key made sing-box reject the entire
+// config ("initialize outbound[N]: invalid public_key") so the VPN never started.
+// The node must degrade to plain TLS, with no reality block.
+func TestParseNode_VLESS_JunkPbkOnTLSNode(t *testing.T) {
+	uri := "vless://35aead44-22e1-d2ef-01a8-ab8c508222ec@172.67.204.176:2053?security=tls&sni=ez.example.workers.dev&type=ws&host=ez.example.workers.dev&path=%2Fsync&fp=chrome&pbk=enabled&allowInsecure=0"
+	node, err := ParseNode(uri, nil)
+	if err != nil || node == nil {
+		t.Fatalf("ParseNode: err=%v node=%v", err, node)
+	}
+	tls, ok := node.Outbound["tls"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected plain TLS to remain enabled")
+	}
+	if _, hasReality := tls["reality"]; hasReality {
+		t.Fatalf("junk pbk=enabled must NOT produce a reality block; tls=%v", tls)
+	}
+}

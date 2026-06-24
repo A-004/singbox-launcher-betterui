@@ -648,7 +648,9 @@ func TestBuildOutbound(t *testing.T) {
 		}
 		node.Query.Set("sni", "example.com")
 		node.Query.Set("fp", "chrome")
-		node.Query.Set("pbk", "test-public-key")
+		// Must be a real X25519 public key (base64url, 43 chars) — a placeholder
+		// is now rejected so junk pbk values can't poison the generated config.
+		node.Query.Set("pbk", "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg")
 		node.Query.Set("sid", "test-short-id")
 
 		outbound := buildOutbound(node)
@@ -669,8 +671,8 @@ func TestBuildOutbound(t *testing.T) {
 		if !ok {
 			t.Fatal("Expected Reality configuration")
 		}
-		if reality["public_key"] != "test-public-key" {
-			t.Errorf("Expected public_key 'test-public-key', got '%v'", reality["public_key"])
+		if reality["public_key"] != "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg" {
+			t.Errorf("Expected the X25519 public_key, got '%v'", reality["public_key"])
 		}
 	})
 
