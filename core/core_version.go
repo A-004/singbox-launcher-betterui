@@ -69,8 +69,8 @@ func (ac *AppController) GetLatestLauncherVersion() (string, error) {
 		name string
 		url  string
 	}{
-		{"GitHub API", "https://api.github.com/repos/Leadaxe/singbox-launcher/releases/latest"},
-		{"GitHub Mirror (ghproxy)", "https://ghproxy.com/https://api.github.com/repos/Leadaxe/singbox-launcher/releases/latest"},
+		{"GitHub API", "https://api.github.com/repos/A-004/singbox-launcher-betterui/releases/latest"},
+		{"GitHub Mirror (ghproxy)", "https://ghproxy.com/https://api.github.com/repos/A-004/singbox-launcher-betterui/releases/latest"},
 	}
 
 	for _, source := range sources {

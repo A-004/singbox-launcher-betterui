@@ -16,6 +16,29 @@ import (
 	"singbox-launcher/internal/platform"
 )
 
+// isRunningOnWindowsWithoutElevation returns true on Windows when the
+// process is NOT running as administrator. On non-Windows it always
+// returns false (issue doesn't apply).
+//
+// Uses a lightweight check: tries to open a SYSTEM-registered service
+// manager. Non-admin processes are denied SERVICE_MANAGER access,
+// which is a reliable indicator without importing sys/windows.
+func isRunningOnWindowsWithoutElevation() bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	// Try to create a temp file in the Windows directory (requires admin).
+	// If it succeeds, we're admin. If not, we're not.
+	testPath := filepath.Join(os.Getenv("windir"), "launcher_admin_check.tmp")
+	f, err := os.Create(testPath)
+	if err == nil {
+		f.Close()
+		os.Remove(testPath)
+		return false // admin
+	}
+	return true // not admin
+}
+
 // updateBinaryStatus проверяет наличие бинарника и обновляет статус
 func (tab *CoreDashboardTab) updateBinaryStatus() {
 	// Проверяем, существует ли бинарник

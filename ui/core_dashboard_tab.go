@@ -328,6 +328,12 @@ func (tab *CoreDashboardTab) createStatusRow() fyne.CanvasObject {
 	// "VPN" title above the power card
 	vpnTitle := widget.NewLabelWithStyle("VPN", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 
+	// Admin warning for Windows (shown only when NOT running as admin).
+	var adminBanner fyne.CanvasObject
+	if isRunningOnWindowsWithoutElevation() {
+		adminBanner = widget.NewLabel("Not running as admin. TUN may fail.")
+	}
+
 	// Inner card — two rows inside a white-outlined square:
 	//   Row 1: status label
 	//   Row 2: [OFF] [R]  or  [ON] [R]
@@ -360,11 +366,17 @@ func (tab *CoreDashboardTab) createStatusRow() fyne.CanvasObject {
 	card := container.NewStack(whiteBg, blackBg, contentPadded)
 	buttonsContainer := container.NewCenter(card)
 
-	return container.NewVBox(
+	rows := []fyne.CanvasObject{
 		widget.NewLabel(""), // top margin
 		buttonsContainer,
 		widget.NewLabel(""), // bottom margin
-	)
+	}
+	if adminBanner != nil {
+		// Insert banner after top margin, before buttons
+		rows = append(rows[:1], append([]fyne.CanvasObject{adminBanner}, rows[1:]...)...)
+	}
+
+	return container.NewVBox(rows...)
 }
 
 func (tab *CoreDashboardTab) createConfigBlock() fyne.CanvasObject {
@@ -1121,7 +1133,7 @@ func (tab *CoreDashboardTab) showUpdatePopup(currentVersion, latestVersion strin
 
 	// Создаем содержимое попапа
 	fyne.Do(func() {
-		downloadURL := "https://github.com/Leadaxe/singbox-launcher/releases/latest"
+		downloadURL := "https://github.com/A-004/singbox-launcher-betterui/releases/latest"
 
 		// Создаем ссылку на скачивание
 		downloadLink := widget.NewHyperlink(locale.T("core.button_download_from_github"), nil)
