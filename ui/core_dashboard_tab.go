@@ -30,6 +30,7 @@ import (
 	"singbox-launcher/internal/dialogs"
 	"singbox-launcher/internal/locale"
 	"singbox-launcher/internal/platform"
+	"singbox-launcher/internal/trafficmonitor"
 	"singbox-launcher/ui/configurator"
 	wizardmodels "singbox-launcher/ui/configurator/models"
 )
@@ -72,6 +73,11 @@ type CoreDashboardTab struct {
 	// Data
 	downloadInProgress       bool // Flag for sing-box download process
 	wintunDownloadInProgress bool // Flag for wintun.dll download process
+
+	// Traffic monitor
+	trafficMonitor *trafficmonitor.TrafficMonitor
+	trafficDlVal   *canvas.Text
+	trafficUlVal   *canvas.Text
 }
 
 // outlinedBorder wraps content in a 1px white rectangle outline.
@@ -116,8 +122,9 @@ func CreateCoreDashboardTab(ac *core.AppController) fyne.CanvasObject {
 	coreInfo := NewAppleCard(container.NewVBox(coreRows...))
 
 	// Group 4: Traffic counter strip — compact one-line download/upload
-	trafficRow := createTrafficStrip()
+	trafficRow := tab.createTrafficStrip()
 	trafficCard := NewAppleCardSmall(trafficRow)
+	tab.startTrafficMonitor()
 
 	// Group 5: State + Exit in one Apple card
 	stateBlock := tab.createStateBlock()
@@ -337,25 +344,29 @@ func (tab *CoreDashboardTab) createStatusRow() fyne.CanvasObject {
 	return container.NewVBox(rows...)
 }
 
-// createTrafficStrip creates a compact one-line traffic counter.
-// Shows download and upload speeds as a thin strip bar.
-func createTrafficStrip() fyne.CanvasObject {
+// createTrafficStrip creates a compact one-line traffic counter with live
+// download/upload speeds updated every second via TrafficMonitor.
+func (tab *CoreDashboardTab) createTrafficStrip() fyne.CanvasObject {
 	dlIcon := canvas.NewText("↓", AppleGreen)
 	dlIcon.TextSize = 12
-	dlVal := canvas.NewText("0", AppleTextPrimary)
+	dlVal := canvas.NewText("0 B/s", AppleTextPrimary)
 	dlVal.TextSize = 13
-	dlUnit := canvas.NewText("MB/s", AppleTextSecondary)
+	tab.trafficDlVal = dlVal
+
+	dlUnit := canvas.NewText("", AppleTextSecondary)
 	dlUnit.TextSize = 11
 
 	upIcon := canvas.NewText("↑", AppleOrange)
 	upIcon.TextSize = 12
-	upVal := canvas.NewText("0", AppleTextPrimary)
+	upVal := canvas.NewText("0 B/s", AppleTextPrimary)
 	upVal.TextSize = 13
-	upUnit := canvas.NewText("MB/s", AppleTextSecondary)
+	tab.trafficUlVal = upVal
+
+	upUnit := canvas.NewText("", AppleTextSecondary)
 	upUnit.TextSize = 11
 
-	dlRow := container.NewHBox(dlIcon, dlVal, dlUnit)
-	upRow := container.NewHBox(upIcon, upVal, upUnit)
+	dlRow := container.NewHBox(dlIcon, dlVal)
+	upRow := container.NewHBox(upIcon, upVal)
 
 	sep := canvas.NewRectangle(AppleSeparator)
 	sep.SetMinSize(fyne.NewSize(1, 16))
@@ -365,6 +376,24 @@ func createTrafficStrip() fyne.CanvasObject {
 		sep,
 		container.NewPadded(upRow),
 	)
+}
+
+// startTrafficMonitor creates and starts the traffic monitor that updates
+// the dl/ul labels every second via fyne.Do.
+func (tab *CoreDashboardTab) startTrafficMonitor() {
+	tab.trafficMonitor = trafficmonitor.NewTrafficMonitor(func(dlBps, ulBps float64) {
+		fyne.Do(func() {
+			if tab.trafficDlVal != nil {
+				tab.trafficDlVal.Text = trafficmonitor.FormatSpeed(dlBps)
+				tab.trafficDlVal.Refresh()
+			}
+			if tab.trafficUlVal != nil {
+				tab.trafficUlVal.Text = trafficmonitor.FormatSpeed(ulBps)
+				tab.trafficUlVal.Refresh()
+			}
+		})
+	})
+	tab.trafficMonitor.Start()
 }
 
 func (tab *CoreDashboardTab) createConfigBlock() fyne.CanvasObject {
