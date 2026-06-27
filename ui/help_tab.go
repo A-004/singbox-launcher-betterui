@@ -6,12 +6,10 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"singbox-launcher/core"
 	"singbox-launcher/internal/constants"
-	"singbox-launcher/internal/debuglog"
 	"singbox-launcher/internal/locale"
 	"singbox-launcher/internal/platform"
 )
@@ -77,37 +75,11 @@ func CreateHelpTab(ac *core.AppController) fyne.CanvasObject {
 		}
 	}()
 
-	telegramLink := widget.NewHyperlink(locale.T("help.telegram_link"), nil)
-	_ = telegramLink.SetURLFromString("https://t.me/singbox_launcher")
-	telegramLink.OnTapped = func() {
-		if err := platform.OpenURL("https://t.me/singbox_launcher"); err != nil {
-			debuglog.ErrorLog("toolsTab: Failed to open Telegram link: %v", err)
-			ShowError(ac.UIService.MainWindow, err)
-		}
-	}
-
-	githubLink := widget.NewHyperlink(locale.T("help.github_link"), nil)
-	_ = githubLink.SetURLFromString("https://github.com/Leadaxe/singbox-launcher")
-	githubLink.OnTapped = func() {
-		if err := platform.OpenURL("https://github.com/Leadaxe/singbox-launcher"); err != nil {
-			debuglog.ErrorLog("toolsTab: Failed to open GitHub link: %v", err)
-			ShowError(ac.UIService.MainWindow, err)
-		}
-	}
-
 	// Language selector + download-locales button moved to the Settings tab
 	// (ui/settings_tab.go) so all launcher-wide preferences live together.
 
 	return container.NewVBox(
 		versionLabel,
 		launcherUpdateLabel,
-		widget.NewSeparator(),
-		container.NewHBox(
-			layout.NewSpacer(),
-			telegramLink,
-			widget.NewLabel(" | "),
-			githubLink,
-			layout.NewSpacer(),
-		),
 	)
 }
