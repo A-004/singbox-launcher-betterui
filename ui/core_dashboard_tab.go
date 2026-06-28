@@ -30,7 +30,7 @@ import (
 	"singbox-launcher/internal/dialogs"
 	"singbox-launcher/internal/locale"
 	"singbox-launcher/internal/platform"
-	"singbox-launcher/internal/trafficmonitor"
+	"singbox-launcher/internal/traffic"
 	"singbox-launcher/ui/configurator"
 	wizardmodels "singbox-launcher/ui/configurator/models"
 )
@@ -75,9 +75,7 @@ type CoreDashboardTab struct {
 	wintunDownloadInProgress bool // Flag for wintun.dll download process
 
 	// Traffic monitor
-	trafficMonitor *trafficmonitor.TrafficMonitor
-	trafficDlVal   *canvas.Text
-	trafficUlVal   *canvas.Text
+	trafficWidget *traffic.Widget
 }
 
 // outlinedBorder wraps content in a 1px white rectangle outline.
@@ -121,10 +119,8 @@ func CreateCoreDashboardTab(ac *core.AppController) fyne.CanvasObject {
 	coreRows = append(coreRows, configBlock)
 	coreInfo := NewAppleCard(container.NewVBox(coreRows...))
 
-	// Group 4: Traffic counter strip — compact one-line download/upload
-	trafficRow := tab.createTrafficStrip()
-	trafficCard := NewAppleCardSmall(trafficRow)
-	tab.startTrafficMonitor()
+	// Group 4: Traffic widget — real-time download/upload from Clash API
+	trafficCard := NewAppleCardSmall(tab.createTrafficWidget())
 
 	// Group 5: State + Exit in one Apple card
 	stateBlock := tab.createStateBlock()
@@ -344,56 +340,21 @@ func (tab *CoreDashboardTab) createStatusRow() fyne.CanvasObject {
 	return container.NewVBox(rows...)
 }
 
-// createTrafficStrip creates a compact one-line traffic counter with live
-// download/upload speeds updated every second via TrafficMonitor.
-func (tab *CoreDashboardTab) createTrafficStrip() fyne.CanvasObject {
-	dlIcon := canvas.NewText("↓", AppleGreen)
-	dlIcon.TextSize = 12
-	dlVal := canvas.NewText("0 B/s", AppleTextPrimary)
-	dlVal.TextSize = 13
-	tab.trafficDlVal = dlVal
+// createTrafficWidget creates a traffic widget using Clash API config
+// from the app controller. Starts monitoring automatically.
+func (tab *CoreDashboardTab) createTrafficWidget() fyne.CanvasObject {
+	cfg := traffic.DefaultClashConfig()
 
-	dlUnit := canvas.NewText("", AppleTextSecondary)
-	dlUnit.TextSize = 11
+	// Try to get Clash API config from the running sing-box.
+	if ac := tab.controller; ac.APIService != nil {
+		if baseURL, token, enabled := ac.APIService.GetClashAPIConfig(); enabled && baseURL != "" {
+			cfg.APIAddress = baseURL
+			cfg.Secret = token
+		}
+	}
 
-	upIcon := canvas.NewText("↑", AppleOrange)
-	upIcon.TextSize = 12
-	upVal := canvas.NewText("0 B/s", AppleTextPrimary)
-	upVal.TextSize = 13
-	tab.trafficUlVal = upVal
-
-	upUnit := canvas.NewText("", AppleTextSecondary)
-	upUnit.TextSize = 11
-
-	dlRow := container.NewHBox(dlIcon, dlVal)
-	upRow := container.NewHBox(upIcon, upVal)
-
-	sep := canvas.NewRectangle(AppleSeparator)
-	sep.SetMinSize(fyne.NewSize(1, 16))
-
-	return container.NewHBox(
-		container.NewPadded(dlRow),
-		sep,
-		container.NewPadded(upRow),
-	)
-}
-
-// startTrafficMonitor creates and starts the traffic monitor that updates
-// the dl/ul labels every second via fyne.Do.
-func (tab *CoreDashboardTab) startTrafficMonitor() {
-	tab.trafficMonitor = trafficmonitor.NewTrafficMonitor(func(dlBps, ulBps float64) {
-		fyne.Do(func() {
-			if tab.trafficDlVal != nil {
-				tab.trafficDlVal.Text = trafficmonitor.FormatSpeed(dlBps)
-				tab.trafficDlVal.Refresh()
-			}
-			if tab.trafficUlVal != nil {
-				tab.trafficUlVal.Text = trafficmonitor.FormatSpeed(ulBps)
-				tab.trafficUlVal.Refresh()
-			}
-		})
-	})
-	tab.trafficMonitor.Start()
+	tab.trafficWidget = traffic.NewWidget(cfg)
+	return tab.trafficWidget.Container()
 }
 
 func (tab *CoreDashboardTab) createConfigBlock() fyne.CanvasObject {

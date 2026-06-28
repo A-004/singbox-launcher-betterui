@@ -99,47 +99,14 @@ func NewAppleSeparator() fyne.CanvasObject {
 	return sep
 }
 
-// AppleTitlebar creates a macOS-style titlebar with traffic light dots and centered title.
-// The title is perfectly centered relative to the window width by balancing
-// the left dots with an invisible spacer of equal width on the right.
+// AppleTitlebar creates a titlebar with centered title and thin bottom border.
 func AppleTitlebar(title string, height float32) fyne.CanvasObject {
 	bg := canvas.NewRectangle(AppleTitleBg)
-
-	// Dots in a fixed-size container
-	closeDot := canvas.NewCircle(AppleClose)
-	minDot := canvas.NewCircle(AppleMinimize)
-	maxDot := canvas.NewCircle(AppleMaximize)
-	gap := canvas.NewRectangle(color.Transparent)
-	gap2 := canvas.NewRectangle(color.Transparent)
-
-	dots := container.NewHBox(
-		closeDot,
-		gap,
-		minDot,
-		gap2,
-		maxDot,
-	)
-
-	// Measure the dots + padding width exactly and balance the right side.
-	// dotsMin = padding-left(10) + 12 + gap(InnerPadding=8) + 12 +
-	//           gap(InnerPadding=8) + 12 + padding-right(10) = ~62px
-	// We call MinSize AFTER the HBox has its content to get real width.
-	// (Padded adds Padding(10) on each side → 10+10=20 extra on left).
-	// We use a separate right spacer with the same measured width.
-	dotsSize := dots.MinSize()
-	paddingSize := float32(20) // NewPadded adds Padding(10) on each side
-	dotsFullWidth := dotsSize.Width + paddingSize
-
-	dotsWrap := container.NewPadded(dots)
-	rightSpacer := canvas.NewRectangle(color.Transparent)
-	// Match the dots width so title centers perfectly
-	rightSpacer.SetMinSize(fyne.NewSize(dotsFullWidth, 0))
 
 	titleTxt := canvas.NewText(title, AppleTextPrimary)
 	titleTxt.TextSize = 13
 
-	// Border with equal-width left and right elements → title centered
-	bar := container.NewBorder(nil, nil, dotsWrap, rightSpacer,
+	bar := container.NewBorder(nil, nil, nil, nil,
 		container.NewCenter(titleTxt),
 	)
 
