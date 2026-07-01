@@ -111,6 +111,10 @@ type ProxySource struct {
 	// ["detour"] for each non-WireGuard node at parse time; validated (dangling/
 	// cycle/self → dropped) at generation time.
 	DetourTag string `json:"detour_tag,omitempty"`
+	// NodeOverrides: per-node outbound overrides, keyed by node tag.
+	// When set, the override is shallow-merged on top of ParsedNode.Outbound
+	// at GenerateNodeJSON time (SPEC 063). Persisted in state.json.
+	NodeOverrides map[string]map[string]interface{} `json:"node_overrides,omitempty"`
 }
 
 // Sentinel ref values for OutboundConfig (SPEC 058-R-N STATE_AS_TEMPLATE_DIFF).
@@ -225,6 +229,9 @@ type ParsedNode struct {
 	Comment  string
 	Query    url.Values
 	Outbound map[string]interface{}
+	// Override — per-node outbound override (SPEC 063).
+	// Shallow-merged on top of Outbound before GenerateNodeJSON.
+	Override map[string]interface{}
 	// Jump is set when the subscription node uses a chain (e.g. Xray dialerProxy → SOCKS before main outbound).
 	Jump *ParsedJump
 	// SourceIndex is the index into ParserConfig.proxies for this node; UnsetSourceIndex if unknown.

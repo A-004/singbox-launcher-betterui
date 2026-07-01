@@ -344,6 +344,8 @@ func (tab *CoreDashboardTab) createStatusRow() fyne.CanvasObject {
 
 // createTrafficWidget creates a traffic widget using Clash API config
 // from the app controller. Starts monitoring automatically.
+// STUN IP discovery + TCP ping runs asynchronously inside the goroutine.
+// TCP ping uses the non-VPN interface (LocalAddr) to bypass the tunnel.
 func (tab *CoreDashboardTab) createTrafficWidget() fyne.CanvasObject {
 	cfg := traffic.DefaultClashConfig()
 
@@ -354,6 +356,10 @@ func (tab *CoreDashboardTab) createTrafficWidget() fyne.CanvasObject {
 			cfg.Secret = token
 		}
 	}
+
+	// Hardcode the physical Ethernet IP (192.168.1.11) so tcping bypasses
+	// the tunnel and goes through the real network interface.
+	cfg.LocalAddr = "192.168.1.11"
 
 	tab.trafficWidget = traffic.NewWidget(cfg)
 	return tab.trafficWidget.Container()

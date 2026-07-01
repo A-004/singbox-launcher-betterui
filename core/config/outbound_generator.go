@@ -69,6 +69,16 @@ type OutboundGenerationResult struct {
 // Includes optional TLS (including reality), transport (ws/http/grpc), and protocol-specific options.
 // Returned string ends with a trailing comma and may include a leading comment line (node label) for readability.
 func GenerateNodeJSON(node *ParsedNode) (string, error) {
+	// SPEC 063: shallow-merge per-node override on top of Outbound.
+	if node.Override != nil && node.Outbound != nil {
+		for k, v := range node.Override {
+			node.Outbound[k] = v
+		}
+	} else if node.Override != nil && node.Outbound == nil {
+		// Unusual edge: override given but no factory Outbound — use override as body.
+		node.Outbound = node.Override
+	}
+
 	// Build JSON with correct field order
 	var parts []string
 

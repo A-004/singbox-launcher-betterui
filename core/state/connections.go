@@ -63,6 +63,10 @@ type Source struct {
 	// a dangling/cyclic/self target is dropped at build time (fail-open), the
 	// node then dials directly. Not applied to WireGuard nodes.
 	DetourTag string `json:"detour_tag,omitempty"`
+
+	// NodeOverrides: per-node outbound overrides, keyed by node tag (SPEC 063).
+	// Values are shallow-merged onto ParsedNode.Outbound at GenerateNodeJSON time.
+	NodeOverrides map[string]map[string]interface{} `json:"node_overrides,omitempty"`
 }
 
 // TagSpec — правила преобразования тэгов нод подписки.

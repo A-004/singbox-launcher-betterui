@@ -107,6 +107,7 @@ func applyProxyEditToSource(ps *config.ProxySource, src *wizardmodels.Source) {
 		src.ExposeGroupTagsToGlobal = ps.ExposeGroupTagsToGlobal
 		src.DetourTag = ps.DetourTag // SPEC 077
 		src.Enabled = !ps.Disabled
+		src.NodeOverrides = ps.NodeOverrides // SPEC 063
 		if ps.TagPrefix != "" || ps.TagPostfix != "" || ps.TagMask != "" {
 			src.Tag = &wizardmodels.TagSpec{
 				Prefix:  ps.TagPrefix,
@@ -127,7 +128,8 @@ func applyProxyEditToSource(ps *config.ProxySource, src *wizardmodels.Source) {
 		}
 		src.Enabled = !ps.Disabled
 		src.ExcludeFromGlobal = ps.ExcludeFromGlobal
-		src.DetourTag = ps.DetourTag // SPEC 077
+		src.DetourTag = ps.DetourTag         // SPEC 077
+		src.NodeOverrides = ps.NodeOverrides // SPEC 063
 		src.Outbounds = nil
 		src.Tag = nil
 	}
@@ -154,6 +156,76 @@ func serializeParserAfterSourceEdit(
 		guiState.RefreshSourcesList()
 	}
 	return nil
+}
+
+// buildNodePreviewRow creates a single row in the Preview node list: label + Edit button.
+// The Edit button opens the per-node outbound JSON editor dialog (SPEC 063).
+func buildNodePreviewRow(
+	node *config.ParsedNode,
+	parent fyne.Window,
+	sourceIndex int,
+	presenter *wizardpresentation.WizardPresenter,
+	guiState *wizardpresentation.GUIState,
+	scratch *config.ProxySource,
+) fyne.CanvasObject {
+	label := widget.NewLabel(nodeDisplayLine(node))
+	label.Truncation = fyne.TextTruncateEllipsis
+
+	// Retrieve current override for this node (may be nil).
+	currentOverride := func() map[string]interface{} {
+		m := presenter.Model()
+		if m == nil || sourceIndex >= len(m.Sources) {
+			return nil
+		}
+		ov := m.Sources[sourceIndex].NodeOverrides
+		if ov == nil {
+			return nil
+		}
+		return ov[node.Tag]
+	}()
+
+	editBtn := widget.NewButton(locale.T("wizard.shared.button_edit"), func() {
+		showNodeEditDialog(parent, node.Tag, node.Outbound, currentOverride, func(newOverride map[string]interface{}) {
+			// Save override into model.Sources[sourceIndex].NodeOverrides.
+			m := presenter.Model()
+			if m == nil || sourceIndex >= len(m.Sources) {
+				return
+			}
+			if m.Sources[sourceIndex].NodeOverrides == nil {
+				m.Sources[sourceIndex].NodeOverrides = make(map[string]map[string]interface{})
+			}
+			if newOverride == nil {
+				delete(m.Sources[sourceIndex].NodeOverrides, node.Tag)
+				if len(m.Sources[sourceIndex].NodeOverrides) == 0 {
+					m.Sources[sourceIndex].NodeOverrides = nil
+				}
+			} else {
+				m.Sources[sourceIndex].NodeOverrides[node.Tag] = newOverride
+			}
+			// Also update the scratch ProxySource for Save consistency.
+			if scratch != nil {
+				if scratch.NodeOverrides == nil {
+					scratch.NodeOverrides = make(map[string]map[string]interface{})
+				}
+				if newOverride == nil {
+					delete(scratch.NodeOverrides, node.Tag)
+					if len(scratch.NodeOverrides) == 0 {
+						scratch.NodeOverrides = nil
+					}
+				} else {
+					scratch.NodeOverrides[node.Tag] = newOverride
+				}
+			}
+			node.Override = newOverride
+			presenter.MarkAsChanged()
+			if guiState.RefreshSourcesList != nil {
+				guiState.RefreshSourcesList()
+			}
+		})
+	})
+	editBtn.Importance = widget.LowImportance
+
+	return container.NewBorder(nil, nil, label, editBtn)
 }
 
 // showSourceEditWindow opens Settings | Preview | JSON for one proxy source (SPEC 026).
@@ -708,22 +780,28 @@ func showSourceEditWindow(
 						previewListHost.Add(container.NewVBox(lbl, layout.NewSpacer()))
 					} else {
 						nn := nodes
-						// widget.List сам виртуализирует scroll — не оборачиваем в
-						// NewScroll/NewVScroll (двойной scroll + ограничивающий
-						// MinSize 280px не давал списку расти на всю высоту).
-						// Truncation=Ellipsis для длинных тегов → "...".
-						srvList := widget.NewList(
-							func() int { return len(nn) },
-							func() fyne.CanvasObject {
-								l := widget.NewLabel("")
-								l.Truncation = fyne.TextTruncateEllipsis
-								return l
-							},
-							func(id int, o fyne.CanvasObject) {
-								o.(*widget.Label).SetText(nodeDisplayLine(nn[id]))
-							},
-						)
-						previewListHost.Add(srvList)
+						// SPEC 063: apply NodeOverrides to each node before showing.
+						modelAfterLoad := presenter.Model()
+						if modelAfterLoad != nil && sourceIndex < len(modelAfterLoad.Sources) {
+							overrides := modelAfterLoad.Sources[sourceIndex].NodeOverrides
+							if overrides != nil {
+								for _, n := range nn {
+									if ov, ok := overrides[n.Tag]; ok {
+										n.Override = ov
+									}
+								}
+							}
+						}
+						// Build a scrollable list with per-node Edit buttons.
+						previewListContent := container.NewVBox()
+						for idx, n := range nn {
+							node := n
+							row := buildNodePreviewRow(node, win, sourceIndex, presenter, guiState, &scratch)
+							previewListContent.Add(row)
+							_ = idx
+						}
+						previewScroll := container.NewScroll(previewListContent)
+						previewListHost.Add(previewScroll)
 					}
 				}
 				previewListHost.Refresh()

@@ -31,6 +31,7 @@ func (s *Source) ToProxySourceV4() configtypes.ProxySource {
 			ExposeGroupTagsToGlobal: s.ExposeGroupTagsToGlobal,
 			Disabled:                !s.Enabled,
 			DetourTag:               s.DetourTag,
+			NodeOverrides:           s.NodeOverrides,
 		}
 		if s.Tag != nil {
 			ps.TagPrefix = s.Tag.Prefix
@@ -46,6 +47,7 @@ func (s *Source) ToProxySourceV4() configtypes.ProxySource {
 			ExcludeFromGlobal: s.ExcludeFromGlobal,
 			Disabled:          !s.Enabled,
 			DetourTag:         s.DetourTag,
+			NodeOverrides:     s.NodeOverrides,
 		}
 	}
 	return configtypes.ProxySource{}
